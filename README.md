@@ -11,28 +11,43 @@ C++, WASM을 사용하여 고속으로 대용량 텍스트 파일의 다른 부�
 ## 환경설정
 ### emsdk 설치
 **표준 설치 방법**
-1. emsdk repository 복제
+1. `emsdk` repository 복제
 ```shell
 $ git clone https://github.com/emscripten-core/emsdk.git
 $ cd emsdk
 ```
-2. emsdk 최신 버전 설치
+2. `emsdk` 최신 버전 설치
 ```shell
 $ ./emsdk install latest
 ```
-3. emsdk 활성화
+3. `emsdk` 활성화
 ```shell
 $ ./emsdk activate latest
 ```
-4. 현재 Shell에서 emsdk 환경변수 설정
+4. 현재 Shell에서 `emsdk` 환경변수 설정
 ```shell
 $ source ./emsdk_env.sh # for Linux, macOS
 $ emsdk_env.bat # for Windows
 ```
 **macOS**
-1. homebrew 이용
+1. `homebrew` 이용
 ```shell
 $ brew install emscripten
+```
+
+## 실행
+`CMake`를 사용하고 있습니다. `CMake`를 사용해주세요.
+### 빌드
+```shell
+$ make all
+```
+### 실행
+`8080`Port으로 Serving됩니다. <br />
+브라우저에서 `localhost:8080`으로 접속해주세요.
+```shell
+$ make run
+# 로컬 서버 실행 중...
+# Serving HTTP on :: port 8000 (http://[::]:8000/) ...
 ```
 
 ## 역할 분담

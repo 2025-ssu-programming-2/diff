@@ -23,5 +23,5 @@ clean:
 
 # 'run' 명령 실행 시: 로컬 서버 실행
 run:
-	@echo "로컬 서버 실행 (예: python3 -m http.server 8000 --directory dist)"
+	@echo "로컬 서버 실행 중..."
 	@python3 -m http.server 8000 --directory dist
