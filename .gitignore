@@ -1,0 +1,8 @@
+# Jetbrains IDE
+.idea
+
+# Visual Studio Code
+.vscode
+
+# Cursor
+.cursor
