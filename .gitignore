@@ -6,3 +6,7 @@
 
 # Cursor
 .cursor
+
+# Build
+build
+.cache
