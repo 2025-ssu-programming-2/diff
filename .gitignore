@@ -4,9 +4,6 @@
 # Visual Studio Code
 .vscode
 
-# Cursor
-.cursor
-
 # Build
 build
 .cache
