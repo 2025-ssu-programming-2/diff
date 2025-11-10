@@ -53,13 +53,35 @@ $ brew install emscripten
 
 ## 빌드 및 실행
 
-### 빌드
+### .env 작성
+
+프로젝트 환경 변수를 `.env`에서 관리하고 있습니다. <br />
+`.env`내 환경 변수를 작성해주세요.
 
 ```shell
-$ emcc src/main.cpp -o public/main.js \
-  -s EXPORTED_FUNCTIONS='["_test_console"]' \
-  -s EXPORTED_RUNTIME_METHODS='["ccall"]' \
-  -s ALLOW_MEMORY_GROWTH=1
+EXPORTED_FUNCTIONS=["_test_console"] # 공개할 함수를 작성
+EXPORTED_RUNTIME_METHODS=["ccall"] # Runtime에서 사용할 Method를 작성
+```
+
+### 빌드
+
+**Windows(PowerShell)**
+
+```shell
+# 단독 실행
+$ .\build.ps1
+
+# 추가 환경 변수와 함께 실행
+$ $env:EXPORTED_FUNCTIONS='["_test_console","_another_func"]'
+$ $env:EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]'
+$ .\build.ps1
+```
+
+**Linux / macOS**
+
+```shell
+$ ./build.sh
+$ sh build.sh
 ```
 
 ### 실행

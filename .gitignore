@@ -1,5 +1,6 @@
-# Jetbrains IDE
+# Jetbrains IDE and Clion maded debug logs
 .idea
+cmake-build-debug
 
 # Visual Studio Code
 .vscode
