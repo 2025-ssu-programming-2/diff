@@ -78,7 +78,7 @@ $ ./build.sh
 $ sh build.sh
 ```
 
-**CLion IDE**
+**CLion IDE** <br />
 보통 CLion과 같은 IDE(통합개발환경)를 설치하여 사용하면 `CMake`와 같은 빌드 도구들이 같이 설치되고 활용됩니다.
 1. Project 열기
 2. `cmake-build-debug`폴더가 생겼는지 확인, 없다면 로딩 대기
