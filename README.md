@@ -119,3 +119,25 @@ TBD.
 ## 성능 최적화 시도
 
 TBD.
+
+## P.S.
+
+### [Git-flow](https://techblog.woowahan.com/2553/) 전략으로 Branch를 관리합니다.
+
+**Branches**
+
+- `master`: Static site를 배포하기 위한 브랜치
+- `develop`: 개발된 내용들의 집합
+- `hotfix`: 배포된 내용을 급하게 수정할 때 사용하기 위한 브랜치, `master`에서 분기해주세요.
+- `feature/`: 가장 작은 단위 개발 내용, `develop`에서 분기해주세요.
+- `refactor/`: 가장 작은 단위의 개선 내용, `develop`에서 분기해주세요.
+- `chore/`: Build와 관련된 수정 및 개선 내용, `develop`에서 분기해주세요.
+- `docs/`: 문서 수정 및 추가 내용, `develop`에서 분기해주세요.
+
+**Commits**
+
+- `feature:`: 가장 작은 단위 개발 내용
+- `refactor:`: 가장 작은 단위의 개선 내용
+- `chore:`: Build와 관련된 수정 및 개선 내용
+- `hotfix:`: `hotfix` 브랜치에서의 작업 내용
+- `docs:`: 문서 수정 및 추가 내용
