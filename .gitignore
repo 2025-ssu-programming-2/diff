@@ -1,10 +1,10 @@
 # Jetbrains IDE and Clion maded debug logs
 .idea
-cmake-build-debug
+cpp/cmake-build-debug
 
 # Visual Studio Code
 .vscode
 
 # Build
-build
+cpp/build
 .cache

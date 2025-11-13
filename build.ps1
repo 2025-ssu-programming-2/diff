@@ -53,8 +53,8 @@ function Show-Progress {
 }
 
 $emccArgs = @(
-    "src/main.cpp",
-    "-o", "public/main.js",
+    "cpp/src/main.cpp",
+    "-o", "web/public/main.js",
     "-s", "EXPORTED_FUNCTIONS=$($env:EXPORTED_FUNCTIONS)",
     "-s", "EXPORTED_RUNTIME_METHODS=$($env:EXPORTED_RUNTIME_METHODS)",
     "-s", "ALLOW_MEMORY_GROWTH=1"

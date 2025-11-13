@@ -52,7 +52,7 @@ EXPORTED_RUNTIME_METHODS="${EXPORTED_RUNTIME_METHODS:-[\"ccall\"]}"
 
 echo -e "${YELLOW}Build C++ code...${RESET}"
 
-$EMCC_CMD src/main.cpp -o public/main.js \
+$EMCC_CMD cpp/src/main.cpp -o web/public/main.js \
   -s EXPORTED_FUNCTIONS="$EXPORTED_FUNCTIONS" \
   -s EXPORTED_RUNTIME_METHODS="$EXPORTED_RUNTIME_METHODS" \
   -s ALLOW_MEMORY_GROWTH=1 &
