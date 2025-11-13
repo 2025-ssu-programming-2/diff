@@ -93,7 +93,7 @@ $ sh build.sh
 브라우저에서 `localhost:8080`으로 접속해주세요.
 
 ```shell
-$ python -m http.server -d public/ 3000
+$ python -m http.server -d dist/ 8080
 # Serving HTTP on :: port 3000 (http://[::]:3000/) ...
 ```
 
