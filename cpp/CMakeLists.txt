@@ -16,3 +16,5 @@ add_custom_target(
     COMMAND ${CMAKE_SOURCE_DIR}/build.ps1
     COMMENT "...CMAKE BUILD(WINDOWS) START..."
 )
+
+add_executable(diff src/main.cpp)
