@@ -39,6 +39,17 @@ $ emsdk_env.bat # for Windows
 $ brew install emscripten
 ```
 
+### Bun.js(Web Runtime) 설치
+**Windows(PowerShell)**
+```shell
+$ powershell -c "irm bun.sh/install.ps1 | iex"
+```
+
+**macOS**
+```shell
+$ curl -fsSL https://bun.sh/install | bash
+```
+
 ### (선택) CMake 설치
 **Windows(PowerShell)**
 ```shell
@@ -60,7 +71,7 @@ EXPORTED_FUNCTIONS=["_test_console"] # 공개할 함수를 작성
 EXPORTED_RUNTIME_METHODS=["ccall"] # Runtime에서 사용할 Method를 작성
 ```
 
-### 빌드
+### C++ 코드 빌드
 **Windows(PowerShell)**
 ```shell
 # 단독 실행
@@ -88,13 +99,24 @@ $ sh build.sh
 4. `Build` 성공 확인. `public/` 하위에 `main.js`, `main.wasm`파일이 생겨야 합니다.
 ![build_result](./docs/build-result.png)
 
+### Web 환경설정 및 코드 빌드
+1. `web/` 으로 이동해주세요.
+2. 의존성 패키지를 설치해주세요.
+```shell
+$ bun install
+```
+3. 빌드
+```shell
+$ bun run build # dist/ 이름으로 빌드 결과가 생성됩니다. 
+```
+
 ### 실행
 `8080`Port으로 Serving됩니다. <br />
 브라우저에서 `localhost:8080`으로 접속해주세요.
 
 ```shell
-$ python -m http.server -d dist/ 8080
-# Serving HTTP on :: port 3000 (http://[::]:3000/) ...
+$ python -m http.server -d web/dist/ 8080
+# Serving HTTP on :: port 8080 (http://[::]:8080/) ...
 ```
 
 ## 역할 분담
