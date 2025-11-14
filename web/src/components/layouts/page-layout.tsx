@@ -16,7 +16,7 @@ export default function PageLayout({ children, className, title, ...props }: Pag
             <div id="title-container" className="w-full">
               {typeof title === 'string' ? <span className="text-6xl font-black">{title}</span> : title}
             </div>
-            <Separator className="mt-4" />
+            <Separator className="mt-2" />
           </>
         )}
 
