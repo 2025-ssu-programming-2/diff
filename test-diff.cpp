@@ -1,8 +1,8 @@
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <vector>
 #include <string>
-#include <cstring>
-#include <emscripten/emscripten.h>
 
 // Diff 결과를 나타내는 구조체
 struct DiffResult {
@@ -16,12 +16,10 @@ class DiffEngine {
   std::vector<std::string> text2;
   std::vector<std::vector<int>> dp;
 
-  // 두 문자열이 같은지 비교
   bool isEqual(const std::string& a, const std::string& b) {
     return a == b;
   }
 
-  // LCS 길이를 계산하는 DP 테이블 생성
   void computeLCS() {
     int m = text1.size();
     int n = text2.size();
@@ -38,7 +36,6 @@ class DiffEngine {
     }
   }
 
-  // DP 테이블을 역추적하여 Diff 결과 생성
   std::vector<DiffResult> backtrace() {
     std::vector<DiffResult> result;
     int i = text1.size();
@@ -46,16 +43,13 @@ class DiffEngine {
 
     while (i > 0 || j > 0) {
       if (i > 0 && j > 0 && isEqual(text1[i - 1], text2[j - 1])) {
-        // 동일한 라인
         result.insert(result.begin(), {0, text1[i - 1]});
         i--;
         j--;
       } else if (j > 0 && (i == 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-        // 추가된 라인
         result.insert(result.begin(), {1, text2[j - 1]});
         j--;
       } else if (i > 0) {
-        // 삭제된 라인
         result.insert(result.begin(), {2, text1[i - 1]});
         i--;
       }
@@ -79,62 +73,56 @@ class DiffEngine {
   }
 };
 
-// 전역 diff 엔진
-DiffEngine diffEngine;
-std::vector<DiffResult> lastDiffResult;
+std::string readFile(const char* filename) {
+  std::ifstream file(filename);
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  return buffer.str();
+}
 
-// C에서 호출할 수 있는 함수들
-extern "C" {
-
-// 문자열을 줄 단위로 분할
-void parseText(const char* text, bool isFirstText) {
-  std::string str(text);
+std::vector<std::string> parseText(const std::string& text) {
   std::vector<std::string> lines;
+  std::istringstream stream(text);
+  std::string line;
 
-  size_t start = 0;
-  size_t end = str.find('\n');
-
-  while (end != std::string::npos) {
-    lines.push_back(str.substr(start, end - start));
-    start = end + 1;
-    end = str.find('\n', start);
-  }
-  if (start < str.length()) {
-    lines.push_back(str.substr(start));
+  while (std::getline(stream, line)) {
+    lines.push_back(line);
   }
 
-  if (isFirstText) {
-    diffEngine.setText1(lines);
-  } else {
-    diffEngine.setText2(lines);
+  return lines;
+}
+
+int main(int argc, char* argv[]) {
+  if (argc < 3) {
+    std::cerr << "Usage: " << argv[0] << " <file1> <file2>" << std::endl;
+    return 1;
   }
-}
 
-// Diff 계산 실행
-void runDiff() {
-  lastDiffResult = diffEngine.computeDiff();
-}
+  std::string text1Str = readFile(argv[1]);
+  std::string text2Str = readFile(argv[2]);
 
-// 결과 개수 반환
-int getResultCount() {
-  return lastDiffResult.size();
-}
+  DiffEngine engine;
+  engine.setText1(parseText(text1Str));
+  engine.setText2(parseText(text2Str));
 
-// 특정 인덱스의 결과 반환 (type, content)
-const char* getResultItem(int index) {
-  static std::string result;
-  if (index >= 0 && index < lastDiffResult.size()) {
-    result = std::to_string(lastDiffResult[index].type) + "|" +
-             lastDiffResult[index].content;
-    return result.c_str();
+  std::vector<DiffResult> results = engine.computeDiff();
+
+  std::cout << "Total lines: " << results.size() << std::endl;
+  std::cout << "\n=== Diff Results ===" << std::endl;
+
+  for (const auto& result : results) {
+    switch (result.type) {
+      case 0:
+        std::cout << "  " << result.content << std::endl;
+        break;
+      case 1:
+        std::cout << "+ " << result.content << std::endl;
+        break;
+      case 2:
+        std::cout << "- " << result.content << std::endl;
+        break;
+    }
   }
-  return "";
-}
 
-// 테스트 함수 (기존 함수)
-void test_console(int a, int b) {
-  std::cout << a << std::endl;
-  std::cout << b << std::endl;
+  return 0;
 }
-
-}  // extern "C"

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Diff WASM Test</title>
+  <style>
+    body { font-family: monospace; margin: 20px; }
+    .result { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+    .same { color: #666; }
+    .added { background-color: #c8e6c9; }
+    .deleted { background-color: #ffcccc; }
+    button { padding: 10px 20px; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <h1>Diff WASM Test</h1>
+  <button onclick="runTest()">Run Test</button>
+  <div id="result"></div>
+
+  <script src="/main.js"></script>
+  <script>
+    let wasmModule = null;
+
+    function initWasm() {
+      return new Promise((resolve, reject) => {
+        const checkModule = () => {
+          if (typeof Module !== 'undefined' && Module.ccall) {
+            wasmModule = Module;
+            console.log('WASM Module loaded!', wasmModule);
+            resolve(wasmModule);
+          } else {
+            setTimeout(checkModule, 100);
+          }
+        };
+
+        setTimeout(() => {
+          reject(new Error('WASM module failed to load within 5 seconds'));
+        }, 5000);
+
+        checkModule();
+      });
+    }
+
+    async function runTest() {
+      try {
+        console.log('Initializing WASM...');
+        const module = await initWasm();
+
+        const text1 = `Hello World
+This is a test
+Diff algorithm
+Line 4`;
+
+        const text2 = `Hello World
+This is modified
+Diff algorithm
+Line 4
+New line 5`;
+
+        console.log('Parsing text 1...');
+        module.ccall('parseText', null, ['string', 'boolean'], [text1, true]);
+
+        console.log('Parsing text 2...');
+        module.ccall('parseText', null, ['string', 'boolean'], [text2, false]);
+
+        console.log('Running diff...');
+        module.ccall('runDiff', null, [], []);
+
+        console.log('Getting results...');
+        const resultCount = module.ccall('getResultCount', 'number', [], []);
+        console.log('Result count:', resultCount);
+
+        let html = '<div class="result"><h2>Diff Result:</h2>';
+        for (let i = 0; i < resultCount; i++) {
+          const resultStr = module.ccall('getResultItem', 'string', ['number'], [i]);
+          console.log(`Item ${i}:`, resultStr);
+
+          const [typeStr, ...contentParts] = resultStr.split('|');
+          const content = contentParts.join('|');
+          const type = typeStr === '0' ? 'same' : typeStr === '1' ? 'added' : 'deleted';
+
+          const prefix = type === 'added' ? '+ ' : type === 'deleted' ? '- ' : '  ';
+          html += `<div class="${type}">${prefix}${escapeHtml(content)}</div>`;
+        }
+        html += '</div>';
+
+        document.getElementById('result').innerHTML = html;
+        console.log('Test completed successfully!');
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('result').innerHTML = `<div style="color: red;"><h2>Error:</h2><p>${error.message}</p></div>`;
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Auto-run on load
+    window.addEventListener('load', runTest);
+  </script>
+</body>
+</html>
