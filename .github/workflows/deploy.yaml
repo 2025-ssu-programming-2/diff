@@ -3,10 +3,10 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - master  # master 브랜치에 push가 발생했을 때 실행됩니다.
+      - master
 
 permissions:
-  contents: write # gh-pages 브랜치에 쓰기 권한이 필요합니다.
+  contents: write
 
 jobs:
   deploy:
@@ -14,12 +14,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. master 브랜치의 최신 코드를 체크아웃합니다.
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. 'built' 디렉터리의 내용을 'gh-pages' 브랜치로 배포합니다.
-      #    빌드 스크립트 실행 없이 바로 배포합니다.
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
