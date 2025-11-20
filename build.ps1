@@ -1,3 +1,5 @@
+& "C:\emsdk\emsdk_env.bat"
+
 Write-Host "Start build..." -ForegroundColor Cyan
 
 function Load-Env {
@@ -60,17 +62,12 @@ $emccArgs = @(
     "-s", "ALLOW_MEMORY_GROWTH=1"
 )
 
-$process = Start-Process -FilePath $EMCC_CMD -ArgumentList $emccArgs -PassThru -NoNewWindow
+& $EMCC_CMD @emccArgs
 
-Show-Progress -ProcessId $process.Id
-
-$process.WaitForExit()
-
-if ($process.ExitCode -ne 0) {
-    Write-Host "Build failed with exit code $($process.ExitCode)" -ForegroundColor Red
-    exit $process.ExitCode
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Build failed with exit code $($LASTEXITCODE)" -ForegroundColor Red
+    exit $LASTEXITCODE
 }
 
 Write-Host "Build C++ code done!" -ForegroundColor Green
 Write-Host "Build done!" -ForegroundColor Cyan
-
