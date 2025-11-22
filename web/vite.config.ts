@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react-swc';
 
 export default defineConfig({
+  base: '/diff/', // GitHub Pages 서브디렉토리 경로
   plugins: [react(), tailwindcss()],
   server: {
     port: 3000,
