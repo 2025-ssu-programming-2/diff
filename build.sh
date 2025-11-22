@@ -8,7 +8,7 @@ GREEN='\033[0;32m'
 
 load_env() {
     local env_file=".env"
-    echo -e "${YELLOW}Found .env file! load .env file...${RESET}"
+    echo "${YELLOW}Found .env file! load .env file...${RESET}"
     if [ -f "$env_file" ]; then
         while IFS= read -r line || [ -n "$line" ]; do
             line=$(echo "$line" | sed 's/#.*$//')
@@ -19,7 +19,7 @@ load_env() {
             fi
         done < "$env_file"
     fi
-    echo -e "${YELLOW}Load .env file done!${RESET}"
+    echo "${YELLOW}Load .env file done!${RESET}"
 }
 
 show_progress() {
@@ -34,11 +34,11 @@ show_progress() {
     printf "\r${GREEN}Progress: 100%%${RESET}\n"
 }
 
-echo -e "${CYAN}Start build...${RESET}"
+echo  "${CYAN}Start build...${RESET}"
 
 if ! command -v emcc >/dev/null 2>&1
 then
-    echo -e "${RED}'emcc' command could not found. please install it.${RESET}"
+    echo "${RED}'emcc' command could not found. please install it.${RESET}"
     exit 1
 fi
 
@@ -50,7 +50,7 @@ EMCC_CMD="emcc"
 EXPORTED_FUNCTIONS="${EXPORTED_FUNCTIONS:-[\"_test_console\"]}"
 EXPORTED_RUNTIME_METHODS="${EXPORTED_RUNTIME_METHODS:-[\"ccall\"]}"
 
-echo -e "${YELLOW}Build C++ code...${RESET}"
+echo "${YELLOW}Build C++ code...${RESET}"
 
 $EMCC_CMD cpp/src/main.cpp -o web/public/main.js \
   -s EXPORTED_FUNCTIONS="$EXPORTED_FUNCTIONS" \
@@ -62,6 +62,6 @@ show_progress $EMCC_PID
 
 wait $EMCC_PID
 
-echo -e "${GREEN}Build C++ code done!${RESET}"
+echo "${GREEN}Build C++ code done!${RESET}"
 
-echo -e "${CYAN}Build done!${RESET}"
+echo "${CYAN}Build done!${RESET}"
