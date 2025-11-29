@@ -25,6 +25,7 @@ export type DiffLine = {
   lineNum: number | null;
   charStart?: number;
   charEnd?: number;
+  tokens?: WordToken[];
 };
 
 export type DiffPair = {
@@ -73,6 +74,7 @@ export const parseDiffOutput = (diffOutput: string): DiffPair[] => {
             lineNum: beforeLineNum,
             charStart: item.left_start >= 0 ? item.left_start : undefined,
             charEnd: item.left_end >= 0 ? item.left_end : undefined,
+            tokens: item.tokens,
           },
           after: {
             type: 'change',
@@ -80,6 +82,7 @@ export const parseDiffOutput = (diffOutput: string): DiffPair[] => {
             lineNum: afterLineNum,
             charStart: item.right_start >= 0 ? item.right_start : undefined,
             charEnd: item.right_end >= 0 ? item.right_end : undefined,
+            tokens: item.tokens,
           },
         });
         beforeLineNum++;
