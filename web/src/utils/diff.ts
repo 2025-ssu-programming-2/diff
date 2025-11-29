@@ -1,4 +1,10 @@
-export type WasmDiffItem = {
+type WordToken = {
+  op: 'equal' | 'delete' | 'insert';
+  left: string;
+  right: string;
+};
+
+type WasmDiffItem = {
   op: 'equal' | 'delete' | 'insert' | 'replace';
   left: string;
   right: string;
@@ -6,6 +12,7 @@ export type WasmDiffItem = {
   left_end: number;
   right_start: number;
   right_end: number;
+  tokens: WordToken[];
 };
 
 export type WasmDiffResponse = {
