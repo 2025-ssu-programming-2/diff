@@ -8,7 +8,7 @@ import type { Nullish } from '@/types/common.ts';
 import { convertBytes } from '@/utils/file.ts';
 
 const uploadFieldVariants = cva(
-  'flex flex-col w-full h-[120px] border rounded-lg bg-muted justify-center items-center',
+  'flex flex-col w-full h-[120px] border rounded-lg bg-muted justify-center items-center cursor-pointer',
 );
 
 export type UploadFieldProps = Omit<React.ComponentProps<'div'>, 'children' | 'onChange'> &

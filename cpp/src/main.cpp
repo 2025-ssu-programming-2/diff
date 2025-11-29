@@ -1,24 +1,36 @@
 // ------------------------------------------------------------
-// Myers 알고리즘(줄 단위 diff) + 간단 문자 단위 변경 위치
+// Myers 알고리즘(줄 단위 diff) + "띄어쓰기 기준 단어 단위 diff"
 // ------------------------------------------------------------
 // diff_text_impl(baseText, changedText):
-//   - baseText / changedText : 전체 텍스트 (줄 사이에 '\n')
-//   - 반환값: JSON 문자열 (const char*)
-//       {
-//         "rows": [
-//           {
-//             "op": "equal" | "delete" | "insert" | "replace",
-//             "left":  "원본 한 줄(없으면 빈 문자열)",
-//             "right": "수정본 한 줄(없으면 빈 문자열)",
-//             // op == "replace" 일 때만 유효 (문자 단위 변경 위치)
-//             "left_start":  정수 (0 이상) 또는 -1,
-//             "left_end":    정수 (0 이상) 또는 -1,  // [start, end) 구간
-//             "right_start": 정수 (0 이상) 또는 -1,
-//             "right_end":   정수 (0 이상) 또는 -1
-//           },
-//           ...
-//         ]
-//       }
+//
+// {
+//   "rows": [
+//     {
+//       "op": "equal",
+//       "left": "Hello",
+//       "right": "Hello"
+//     },
+//     {
+//       "op": "insert",
+//       "left": "",
+//       "right": "Happy"
+//     },
+//     {
+//       "op": "equal",
+//       "left": "World",
+//       "right": "World"
+//     },
+//     {
+//       "op": "replace",
+//       "left": "Second",
+//       "right": "Second Modified",
+//       "tokens": [
+//         {"op": "equal",  "left": "Second",  "right": "Second"},
+//         {"op": "insert", "left": "",        "right": "Modified"}
+//       ]
+//     }
+//   ]
+// }
 //
 //   - WASM 에서는 extern "C" 로 감싼 diff_text() 를 호출하면 됨
 // ------------------------------------------------------------
@@ -27,7 +39,6 @@
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
-#include <cstdio>   // printf
 
 using namespace std;
 
@@ -74,7 +85,7 @@ vector<string> splitLines(const char* text) {
 }
 
 // ------------------------------------------------------------
-// Myers 알고리즘: 두 줄 목록 a, b 에 대한 줄 단위 diff
+// Myers 알고리즘: 줄 단위 diff
 // ------------------------------------------------------------
 vector<Edit> myersDiff(const vector<string>& a, const vector<string>& b) {
     int n = static_cast<int>(a.size());
@@ -215,40 +226,113 @@ string escapeJson(const string& s) {
 }
 
 // ------------------------------------------------------------
-// 한 줄 안에서 "어디가 달라졌는지" 구간만 대략 잡는 함수
-//
-// 아이디어:
-//   1) 앞에서부터 같은 부분은 그대로 스킵 (공통 prefix)
-//   2) 뒤에서부터 같은 부분도 스킵 (공통 suffix)
-//   3) 남은 가운데 부분이 "바뀐 구간"
-//
-// 반환:
-//   left_start, left_end  : oldLine 에서 바뀐 구간 [start, end)
-//   right_start, right_end: newLine 에서 바뀐 구간 [start, end)
+// 공백(스페이스) 기준으로 "단어"들을 잘라내는 함수
+//   "Second Modified" -> ["Second", "Modified"]
 // ------------------------------------------------------------
-void computeChangeRange(const string& oldLine, const string& newLine,
-                        int& left_start, int& left_end,
-                        int& right_start, int& right_end) {
-    size_t n = oldLine.size();
-    size_t m = newLine.size();
+vector<string> splitWordsBySpace(const string& line) {
+    vector<string> result;
+    string word;
 
-    size_t start = 0;
-    while (start < n && start < m && oldLine[start] == newLine[start]) {
-        ++start;
+    for (char c : line) {
+        if (c == ' ') {
+            if (!word.empty()) {
+                result.push_back(word);
+                word.clear();
+            }
+        } else {
+            word.push_back(c);
+        }
     }
 
-    size_t endOld = n;
-    size_t endNew = m;
-    while (endOld > start && endNew > start &&
-           oldLine[endOld - 1] == newLine[endNew - 1]) {
-        --endOld;
-        --endNew;
+    if (!word.empty()) {
+        result.push_back(word);
+    }
+    return result;
+}
+
+// 단어 단위 정렬 정보를 담는 구조체
+struct AlignedToken {
+    string left;   // 기준 텍스트쪽 단어 (없으면 "")
+    string right;  // 변경 텍스트쪽 단어 (없으면 "")
+    char op;       // 'M' = match(equal), 'D' = delete(left만), 'I' = insert(right만)
+};
+
+// ------------------------------------------------------------
+// 한 줄(oldLine, newLine)에 대해 "단어 단위 diff" 를 계산해서
+// JSON 배열 형태의 문자열을 만드는 함수
+//
+// 예)
+//   oldLine = "Second"
+//   newLine = "Second Modified"
+// -> tokens:
+//   [
+//     {"op":"equal",  "left":"Second", "right":"Second"},
+//     {"op":"insert", "left":"",       "right":"Modified"}
+//   ]
+// ------------------------------------------------------------
+string makeWordTokensJSON(const string& oldLine, const string& newLine) {
+    vector<string> a = splitWordsBySpace(oldLine);
+    vector<string> b = splitWordsBySpace(newLine);
+
+    int n = static_cast<int>(a.size());
+    int m = static_cast<int>(b.size());
+
+    // LCS DP: dp[i][j] = a[0..i-1], b[0..j-1] 의 최장 공통 부분 수열 길이
+    vector<vector<int>> dp(n + 1, vector<int>(m + 1, 0));
+
+    for (int i = 1; i <= n; ++i) {
+        for (int j = 1; j <= m; ++j) {
+            if (a[i - 1] == b[j - 1]) {
+                dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+                dp[i][j] = (dp[i - 1][j] > dp[i][j - 1]) ? dp[i - 1][j] : dp[i][j - 1];
+            }
+        }
     }
 
-    left_start  = static_cast<int>(start);
-    left_end    = static_cast<int>(endOld);
-    right_start = static_cast<int>(start);
-    right_end   = static_cast<int>(endNew);
+    // backtrack 하면서 정렬된 토큰 시퀀스 만들기
+    int i = n;
+    int j = m;
+    vector<AlignedToken> revTokens;
+
+    while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && a[i - 1] == b[j - 1]) {
+            // 같은 단어
+            revTokens.push_back({a[i - 1], b[j - 1], 'M'});
+            --i; --j;
+        } else if (j > 0 && (i == 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+            // 오른쪽(새 텍스트)에만 있는 단어 (삽입)
+            revTokens.push_back({"", b[j - 1], 'I'});
+            --j;
+        } else if (i > 0) {
+            // 왼쪽(기준 텍스트)에만 있는 단어 (삭제)
+            revTokens.push_back({a[i - 1], "", 'D'});
+            --i;
+        }
+    }
+
+    reverse(revTokens.begin(), revTokens.end());
+
+    // JSON 배열 만들기
+    string json = "[";
+    bool first = true;
+    for (const auto& t : revTokens) {
+        if (!first) json += ",";
+        first = false;
+
+        string opStr;
+        if (t.op == 'M') opStr = "equal";
+        else if (t.op == 'D') opStr = "delete";
+        else opStr = "insert";
+
+        json += "{";
+        json += "\"op\":\"" + opStr + "\",";
+        json += "\"left\":\"" + escapeJson(t.left) + "\",";
+        json += "\"right\":\"" + escapeJson(t.right) + "\"";
+        json += "}";
+    }
+    json += "]";
+    return json;
 }
 
 // ------------------------------------------------------------
@@ -277,14 +361,11 @@ const char* diff_text_impl(const char* baseText, const char* changedText) {
         string opName;     // "equal", "delete", "insert", "replace"
         string leftText;   // 기준 텍스트 한 줄
         string rightText;  // 변경 텍스트 한 줄
-
-        int leftStart  = -1;
-        int leftEnd    = -1;
-        int rightStart = -1;
-        int rightEnd   = -1;
+        bool hasTokens = false;
+        string tokensJson;
 
         if (e.op == ' ') {
-            // 양쪽에 같은 줄
+            // 공통 줄
             opName   = "equal";
             leftText = e.text;
             rightText = e.text;
@@ -295,13 +376,11 @@ const char* diff_text_impl(const char* baseText, const char* changedText) {
                 leftText = e.text;
                 rightText = edits[i + 1].text;
 
-                // 한 줄 안에서 어디가 바뀌었는지 대략적인 구간 계산
-                computeChangeRange(leftText, rightText,
-                                   leftStart, leftEnd,
-                                   rightStart, rightEnd);
+                // 띄어쓰기 기준 단어 단위 diff
+                tokensJson = makeWordTokensJSON(leftText, rightText);
+                hasTokens = true;
 
-                // 다음 '+' 항목은 이미 처리했으므로 건너뛰기
-                ++i;
+                ++i; // 다음 '+' 항목은 이미 처리했으므로 건너뛰기
             } else {
                 opName   = "delete";
                 leftText = e.text;
@@ -326,11 +405,13 @@ const char* diff_text_impl(const char* baseText, const char* changedText) {
         result += "    {";
         result += "\"op\":\"" + opName + "\",";
         result += "\"left\":\"" + leftEsc + "\",";
-        result += "\"right\":\"" + rightEsc + "\",";
-        result += "\"left_start\":" + to_string(leftStart) + ",";
-        result += "\"left_end\":"   + to_string(leftEnd) + ",";
-        result += "\"right_start\":" + to_string(rightStart) + ",";
-        result += "\"right_end\":"   + to_string(rightEnd);
+        result += "\"right\":\"" + rightEsc + "\"";
+
+        // replace 인 경우에만 단어 단위 토큰 정보 추가
+        if (hasTokens) {
+            result += ",\"tokens\":" + tokensJson;
+        }
+
         result += "}";
     }
 
