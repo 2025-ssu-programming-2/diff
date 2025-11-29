@@ -1,4 +1,5 @@
 # diff
+[![Netlify Status](https://api.netlify.com/api/v1/badges/ea2c8d19-0f56-4256-81f2-a7dfeef9807a/deploy-status)](https://app.netlify.com/projects/ssu-diff/deploys)
 
 ## 개요
 이 프로젝트는 숭실대학교 2025년 2학기 미디어경영학과 프로그래밍2 수업의 기말고사 프로젝트입니다. <br />
@@ -118,6 +119,9 @@ $ bun run build # dist/ 이름으로 빌드 결과가 생성됩니다.
 $ python -m http.server -d web/dist/ 8080
 # Serving HTTP on :: port 8080 (http://[::]:8080/) ...
 ```
+
+### 결과
+[/.diff-app](https://github.com/2025-ssu-programming-2/diff/tree/develop/.diff-app) 에서 확인하실 수 있습니다.
 
 ## 역할 분담
 - 최강재(팀장)
