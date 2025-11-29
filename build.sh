@@ -47,8 +47,8 @@ load_env
 
 EMCC_CMD="emcc"
 
-EXPORTED_FUNCTIONS="${EXPORTED_FUNCTIONS:-[\"_test_console\"]}"
-EXPORTED_RUNTIME_METHODS="${EXPORTED_RUNTIME_METHODS:-[\"ccall\"]}"
+EXPORTED_FUNCTIONS="${EXPORTED_FUNCTIONS:-[\"_diff_text\",\"_malloc\",\"_free\"]}"
+EXPORTED_RUNTIME_METHODS="${EXPORTED_RUNTIME_METHODS:-[\"ccall\",\"cwrap\",\"allocateUTF8\",\"UTF8ToString\"]}"
 
 echo "${YELLOW}Build C++ code...${RESET}"
 
