@@ -146,14 +146,14 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
                           {displayLineNum}
                         </div>
 
-                        {/* Before 열 */}
+                        {/* Base 열 */}
                         <div
                           className={`flex-1 border-r border-slate-200 p-2 ${beforeBgColor} hover:bg-opacity-80 overflow-auto break-words whitespace-pre-wrap transition-colors`}
                         >
                           <pre className={`m-0 ${beforeTextColor}`}>{beforeLine?.content || ''}</pre>
                         </div>
 
-                        {/* After 열 */}
+                        {/* Compare 열 */}
                         <div
                           className={`flex-1 p-2 ${afterBgColor} hover:bg-opacity-80 overflow-auto break-words whitespace-pre-wrap transition-colors`}
                         >
