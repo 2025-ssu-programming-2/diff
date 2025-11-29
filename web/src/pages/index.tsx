@@ -7,156 +7,10 @@ import { useState } from 'react';
 import type { Nullish } from '@/types/common.ts';
 import { Button } from '@/components/shadcn/button.tsx';
 import { Loader } from 'lucide-react';
-
-declare const Module: {
-  _diff_text?: (text1Ptr: number, text2Ptr: number) => number;
-  UTF8ToString?: (ptr: number) => string;
-  allocateUTF8?: (str: string) => number;
-  _free?: (ptr: number) => void;
-};
+import { parseDiffOutput, type DiffPair } from '@/utils/diff';
+import DiffContainer from '@/components/diff-container';
 
 export type IndexPageProps = Omit<React.ComponentProps<'div'>, 'children'> & {};
-
-type WasmDiffItem = {
-  op: 'equal' | 'delete' | 'insert' | 'replace';
-  left: string;
-  right: string;
-  left_start: number;
-  left_end: number;
-  right_start: number;
-  right_end: number;
-};
-
-type WasmDiffResponse = {
-  rows: WasmDiffItem[];
-};
-
-type DiffLine = {
-  type: 'same' | 'change' | 'add' | 'delete';
-  content: string;
-  lineNum: number | null;
-  charStart?: number;
-  charEnd?: number;
-};
-
-type DiffPair = {
-  type: 'same' | 'change' | 'add' | 'delete';
-  before: DiffLine | null;
-  after: DiffLine | null;
-};
-
-const parseDiffOutput = (diffOutput: string): DiffPair[] => {
-  try {
-    const data: WasmDiffResponse = JSON.parse(diffOutput);
-    const pairs: DiffPair[] = [];
-    let beforeLineNum = 0;
-    let afterLineNum = 0;
-    let i = 0;
-
-    while (i < data.rows.length) {
-      const item = data.rows[i];
-
-      if (item.op === 'equal') {
-        // Skip empty equal operations (e.g., final newline-only lines)
-        if (item.left !== '' || item.right !== '') {
-          pairs.push({
-            type: 'same',
-            before: {
-              type: 'same',
-              content: item.left,
-              lineNum: beforeLineNum,
-            },
-            after: {
-              type: 'same',
-              content: item.right,
-              lineNum: afterLineNum,
-            },
-          });
-        }
-        beforeLineNum++;
-        afterLineNum++;
-        i++;
-      } else if (item.op === 'replace') {
-        pairs.push({
-          type: 'change',
-          before: {
-            type: 'change',
-            content: item.left,
-            lineNum: beforeLineNum,
-            charStart: item.left_start >= 0 ? item.left_start : undefined,
-            charEnd: item.left_end >= 0 ? item.left_end : undefined,
-          },
-          after: {
-            type: 'change',
-            content: item.right,
-            lineNum: afterLineNum,
-            charStart: item.right_start >= 0 ? item.right_start : undefined,
-            charEnd: item.right_end >= 0 ? item.right_end : undefined,
-          },
-        });
-        beforeLineNum++;
-        afterLineNum++;
-        i++;
-      } else if (item.op === 'delete') {
-        // delete 다음에 insert가 있으면 쌍으로 묶기
-        if (i + 1 < data.rows.length && data.rows[i + 1].op === 'insert') {
-          const nextItem = data.rows[i + 1];
-          pairs.push({
-            type: 'change',
-            before: {
-              type: 'change',
-              content: item.left,
-              lineNum: beforeLineNum,
-            },
-            after: {
-              type: 'change',
-              content: nextItem.right,
-              lineNum: afterLineNum,
-            },
-          });
-          beforeLineNum++;
-          afterLineNum++;
-          i += 2;
-        } else {
-          // delete만 있는 경우: after는 null (라인 번호를 표시하지 않음)
-          pairs.push({
-            type: 'delete',
-            before: {
-              type: 'delete',
-              content: item.left,
-              lineNum: beforeLineNum,
-            },
-            after: null,
-          });
-          beforeLineNum++;
-          i++;
-        }
-      } else if (item.op === 'insert') {
-        // insert만 있는 경우 (앞의 delete와 쌍을 이루지 않음)
-        pairs.push({
-          type: 'add',
-          before: null,
-          after: {
-            type: 'add',
-            content: item.right,
-            lineNum: afterLineNum,
-          },
-        });
-        afterLineNum++;
-        i++;
-      } else {
-        // 나머지 op (empty lines 등): 무시
-        i++;
-      }
-    }
-
-    return pairs;
-  } catch (e) {
-    console.error('JSON 파싱 실패:', e);
-    console.error('Raw output:', diffOutput);
-    return [];
-  }
-};
 
 export default function IndexPage({ className, ...props }: IndexPageProps) {
   const [files, setFiles] = useState<Nullish<File[]>>(null);
@@ -177,8 +31,8 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
       const changedText = await files[1].text();
 
       // 문자열을 WASM 메모리에 할당
-      const baseTextPtr = Module.allocateUTF8?.(baseText);
-      const changedTextPtr = Module.allocateUTF8?.(changedText);
+      const baseTextPtr = Module.allocateUTF8(baseText);
+      const changedTextPtr = Module.allocateUTF8(changedText);
 
       if (!baseTextPtr || !changedTextPtr) {
         console.error('메모리 할당 실패');
@@ -187,11 +41,11 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
       }
 
       // _diff_text 호출 (반환값은 포인터)
-      const resultPtr = Module._diff_text?.(baseTextPtr, changedTextPtr);
+      const resultPtr = Module._diff_text(baseTextPtr, changedTextPtr);
 
       if (resultPtr) {
         // 반환된 포인터를 문자열로 변환
-        const result = Module.UTF8ToString?.(resultPtr);
+        const result = Module.UTF8ToString(resultPtr);
         console.log('diff 결과 문자열:', result);
         if (result) {
           const diffData = parseDiffOutput(result);
@@ -207,8 +61,8 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
       }
 
       // 할당한 메모리 해제
-      if (baseTextPtr) Module._free?.(baseTextPtr);
-      if (changedTextPtr) Module._free?.(changedTextPtr);
+      if (baseTextPtr) Module._free(baseTextPtr);
+      if (changedTextPtr) Module._free(changedTextPtr);
     } catch (e) {
       console.error('호출 실패:', e);
       setDiffView(null);
@@ -241,76 +95,78 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
           )}
         </div>
 
-        {diffView && diffView.length > 0 && (
-          <Wrapper title="검출 결과">
-            <div className="w-full py-4">
-              <div className="overflow-hidden rounded-lg border border-slate-300 font-mono text-sm shadow-sm">
-                {/* 헤더 행: Line | Before | After */}
-                <div className="flex border-b-2 border-slate-300 bg-slate-100 font-semibold">
-                  <div className="flex w-16 flex-shrink-0 flex-col justify-center border-r border-slate-300 bg-slate-50 px-2 py-2 text-xs text-slate-600">
-                    Line
-                  </div>
-                  <div className="flex-1 border-r border-slate-300 px-4 py-2 text-slate-700">Before</div>
-                  <div className="flex-1 px-4 py-2 text-slate-700">After</div>
-                </div>
-
-                {/* 데이터 행들: 각 pair마다 한 행 */}
-                {diffView.map((pair, idx) => {
-                  const beforeLine = pair.before;
-                  const afterLine = pair.after;
-
-                  // 스타일 결정
-                  const beforeBgColor =
-                    pair.type === 'delete' ? 'bg-red-50' : pair.type === 'change' ? 'bg-yellow-50' : 'bg-white';
-                  const beforeTextColor =
-                    pair.type === 'delete'
-                      ? 'text-red-900'
-                      : pair.type === 'change'
-                        ? 'text-yellow-900'
-                        : 'text-slate-700';
-
-                  const afterBgColor =
-                    pair.type === 'add' ? 'bg-green-50' : pair.type === 'change' ? 'bg-yellow-50' : 'bg-white';
-                  const afterTextColor =
-                    pair.type === 'add'
-                      ? 'text-green-900'
-                      : pair.type === 'change'
-                        ? 'text-yellow-900'
-                        : 'text-slate-700';
-
-                  // After 기준으로 라인 번호 결정 (After가 없으면 빈칸)
-                  let displayLineNum = '';
-                  if (afterLine && afterLine.lineNum !== null) {
-                    displayLineNum = String(afterLine.lineNum + 1);
-                  }
-
-                  return (
-                    <div key={`row-${idx}`} className="flex border-b border-slate-200 last:border-b-0">
-                      {/* 라인 번호 열 */}
-                      <div className="w-16 flex-shrink-0 border-r border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs text-slate-400 select-none">
-                        {displayLineNum}
-                      </div>
-
-                      {/* Before 열 */}
-                      <div
-                        className={`flex-1 border-r border-slate-200 p-2 ${beforeBgColor} hover:bg-opacity-80 overflow-auto break-words whitespace-pre-wrap transition-colors`}
-                      >
-                        <pre className={`m-0 ${beforeTextColor}`}>{beforeLine?.content || ''}</pre>
-                      </div>
-
-                      {/* After 열 */}
-                      <div
-                        className={`flex-1 p-2 ${afterBgColor} hover:bg-opacity-80 overflow-auto break-words whitespace-pre-wrap transition-colors`}
-                      >
-                        <pre className={`m-0 ${afterTextColor}`}>{afterLine?.content || ''}</pre>
-                      </div>
+        <DiffContainer loading={loading}>
+          {diffView && diffView.length > 0 && (
+            <Wrapper title="검출 결과">
+              <div className="w-full py-4">
+                <div className="overflow-hidden rounded-lg border border-slate-300 font-mono text-sm shadow-sm">
+                  {/* 헤더 행: Line | Before | After */}
+                  <div className="flex border-b-2 border-slate-300 bg-slate-100 font-semibold">
+                    <div className="flex w-16 flex-shrink-0 flex-col justify-center border-r border-slate-300 bg-slate-50 px-2 py-2 text-xs text-slate-600">
+                      Line
                     </div>
-                  );
-                })}
+                    <div className="flex-1 border-r border-slate-300 px-4 py-2 text-slate-700">Base</div>
+                    <div className="flex-1 px-4 py-2 text-slate-700">Compare</div>
+                  </div>
+
+                  {/* 데이터 행들: 각 pair마다 한 행 */}
+                  {diffView.map((pair, idx) => {
+                    const beforeLine = pair.before;
+                    const afterLine = pair.after;
+
+                    // 스타일 결정
+                    const beforeBgColor =
+                      pair.type === 'delete' ? 'bg-red-50' : pair.type === 'change' ? 'bg-yellow-50' : 'bg-white';
+                    const beforeTextColor =
+                      pair.type === 'delete'
+                        ? 'text-red-900'
+                        : pair.type === 'change'
+                          ? 'text-yellow-900'
+                          : 'text-slate-700';
+
+                    const afterBgColor =
+                      pair.type === 'add' ? 'bg-green-50' : pair.type === 'change' ? 'bg-yellow-50' : 'bg-white';
+                    const afterTextColor =
+                      pair.type === 'add'
+                        ? 'text-green-900'
+                        : pair.type === 'change'
+                          ? 'text-yellow-900'
+                          : 'text-slate-700';
+
+                    // After 기준으로 라인 번호 결정 (After가 없으면 빈칸)
+                    let displayLineNum = '';
+                    if (afterLine && afterLine.lineNum !== null) {
+                      displayLineNum = String(afterLine.lineNum + 1);
+                    }
+
+                    return (
+                      <div key={`row-${idx}`} className="flex border-b border-slate-200 last:border-b-0">
+                        {/* 라인 번호 열 */}
+                        <div className="w-16 flex-shrink-0 border-r border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs text-slate-400 select-none">
+                          {displayLineNum}
+                        </div>
+
+                        {/* Before 열 */}
+                        <div
+                          className={`flex-1 border-r border-slate-200 p-2 ${beforeBgColor} hover:bg-opacity-80 overflow-auto break-words whitespace-pre-wrap transition-colors`}
+                        >
+                          <pre className={`m-0 ${beforeTextColor}`}>{beforeLine?.content || ''}</pre>
+                        </div>
+
+                        {/* After 열 */}
+                        <div
+                          className={`flex-1 p-2 ${afterBgColor} hover:bg-opacity-80 overflow-auto break-words whitespace-pre-wrap transition-colors`}
+                        >
+                          <pre className={`m-0 ${afterTextColor}`}>{afterLine?.content || ''}</pre>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </Wrapper>
-        )}
+            </Wrapper>
+          )}
+        </DiffContainer>
       </div>
     </PageLayout>
   );
