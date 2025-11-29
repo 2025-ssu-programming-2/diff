@@ -6,7 +6,7 @@ import { cn } from '@/utils/shadcn.ts';
 import { useEffect, useState } from 'react';
 import type { Nullish } from '@/types/common.ts';
 
-const uploadVariants = cva('w-full flex py-4 flex gap-4');
+const uploadVariants = cva('w-full flex py-4 gap-4');
 
 export type UploadProps = Omit<React.ComponentProps<'div'>, 'children' | 'onChange'> &
   VariantProps<typeof uploadVariants> & {
