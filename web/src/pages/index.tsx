@@ -2,9 +2,11 @@ import * as React from 'react';
 import { P } from '@/components/shadcn/typography.tsx';
 import PageLayout from '@/components/layouts/page-layout.tsx';
 import Upload from '@/components/upload.tsx';
+import Wrapper from '@/components/wrapper';
 import { useState } from 'react';
 import type { Nullish } from '@/types/common.ts';
 import { Button } from '@/components/shadcn/button.tsx';
+import { Loader } from 'lucide-react';
 
 declare const Module: {
   _diff_text?: (text1Ptr: number, text2Ptr: number) => number;
@@ -229,78 +231,87 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
       className={className}
       {...props}
     >
-      <Upload files={files} onChange={setFiles} />
-      {files && (
-        <Button
-          variant="outline"
-          className="h-[46px] w-full"
-          onClick={handleCompare}
-          disabled={loading}
-        >
-          {loading ? '비교 중...' : '비교 시작!'}
-        </Button>
-      )}
-      {diffView && diffView.length > 0 && (
-        <div className="mt-8">
-          <h3 className="font-semibold mb-4 text-lg">Diff 결과</h3>
-          <div className="border border-slate-300 rounded-lg overflow-hidden shadow-sm font-mono text-sm">
-            {/* 헤더 행: Line | Before | After */}
-            <div className="flex border-b-2 border-slate-300 bg-slate-100 font-semibold">
-              <div className="w-16 px-2 py-2 text-xs text-slate-600 flex-shrink-0 bg-slate-50 border-r border-slate-300">
-                Line
-              </div>
-              <div className="flex-1 px-4 py-2 border-r border-slate-300 text-slate-700">
-                Before
-              </div>
-              <div className="flex-1 px-4 py-2 text-slate-700">
-                After
+      <div className="flex w-full flex-col gap-4">
+        <div className="w-full">
+          <Upload files={files} onChange={setFiles} />
+          {files && (
+            <Button variant="outline" className="h-[46px] w-full" onClick={handleCompare} disabled={loading}>
+              {loading ? <Loader className="animate-spin" /> : '비교 시작!'}
+            </Button>
+          )}
+        </div>
+
+        {diffView && diffView.length > 0 && (
+          <Wrapper title="검출 결과">
+            <div className="w-full py-4">
+              <div className="overflow-hidden rounded-lg border border-slate-300 font-mono text-sm shadow-sm">
+                {/* 헤더 행: Line | Before | After */}
+                <div className="flex border-b-2 border-slate-300 bg-slate-100 font-semibold">
+                  <div className="flex w-16 flex-shrink-0 flex-col justify-center border-r border-slate-300 bg-slate-50 px-2 py-2 text-xs text-slate-600">
+                    Line
+                  </div>
+                  <div className="flex-1 border-r border-slate-300 px-4 py-2 text-slate-700">Before</div>
+                  <div className="flex-1 px-4 py-2 text-slate-700">After</div>
+                </div>
+
+                {/* 데이터 행들: 각 pair마다 한 행 */}
+                {diffView.map((pair, idx) => {
+                  const beforeLine = pair.before;
+                  const afterLine = pair.after;
+
+                  // 스타일 결정
+                  const beforeBgColor =
+                    pair.type === 'delete' ? 'bg-red-50' : pair.type === 'change' ? 'bg-yellow-50' : 'bg-white';
+                  const beforeTextColor =
+                    pair.type === 'delete'
+                      ? 'text-red-900'
+                      : pair.type === 'change'
+                        ? 'text-yellow-900'
+                        : 'text-slate-700';
+
+                  const afterBgColor =
+                    pair.type === 'add' ? 'bg-green-50' : pair.type === 'change' ? 'bg-yellow-50' : 'bg-white';
+                  const afterTextColor =
+                    pair.type === 'add'
+                      ? 'text-green-900'
+                      : pair.type === 'change'
+                        ? 'text-yellow-900'
+                        : 'text-slate-700';
+
+                  // After 기준으로 라인 번호 결정 (After가 없으면 빈칸)
+                  let displayLineNum = '';
+                  if (afterLine && afterLine.lineNum !== null) {
+                    displayLineNum = String(afterLine.lineNum + 1);
+                  }
+
+                  return (
+                    <div key={`row-${idx}`} className="flex border-b border-slate-200 last:border-b-0">
+                      {/* 라인 번호 열 */}
+                      <div className="w-16 flex-shrink-0 border-r border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs text-slate-400 select-none">
+                        {displayLineNum}
+                      </div>
+
+                      {/* Before 열 */}
+                      <div
+                        className={`flex-1 border-r border-slate-200 p-2 ${beforeBgColor} hover:bg-opacity-80 overflow-auto break-words whitespace-pre-wrap transition-colors`}
+                      >
+                        <pre className={`m-0 ${beforeTextColor}`}>{beforeLine?.content || ''}</pre>
+                      </div>
+
+                      {/* After 열 */}
+                      <div
+                        className={`flex-1 p-2 ${afterBgColor} hover:bg-opacity-80 overflow-auto break-words whitespace-pre-wrap transition-colors`}
+                      >
+                        <pre className={`m-0 ${afterTextColor}`}>{afterLine?.content || ''}</pre>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-
-            {/* 데이터 행들: 각 pair마다 한 행 */}
-            {diffView.map((pair, idx) => {
-              const beforeLine = pair.before;
-              const afterLine = pair.after;
-
-              // 스타일 결정
-              const beforeBgColor = pair.type === 'delete' ? 'bg-red-50' : pair.type === 'change' ? 'bg-yellow-50' : 'bg-white';
-              const beforeTextColor = pair.type === 'delete' ? 'text-red-900' : pair.type === 'change' ? 'text-yellow-900' : 'text-slate-700';
-
-              const afterBgColor = pair.type === 'add' ? 'bg-green-50' : pair.type === 'change' ? 'bg-yellow-50' : 'bg-white';
-              const afterTextColor = pair.type === 'add' ? 'text-green-900' : pair.type === 'change' ? 'text-yellow-900' : 'text-slate-700';
-
-              // After 기준으로 라인 번호 결정 (After가 없으면 빈칸)
-              let displayLineNum = '';
-              if (afterLine && afterLine.lineNum !== null) {
-                displayLineNum = String(afterLine.lineNum + 1);
-              }
-
-              return (
-                <div key={`row-${idx}`} className="flex border-b border-slate-200 last:border-b-0">
-                  {/* 라인 번호 열 */}
-                  <div className="w-16 text-right px-2 py-2 text-xs text-slate-400 flex-shrink-0 bg-slate-50 border-r border-slate-200 select-none">
-                    {displayLineNum}
-                  </div>
-
-                  {/* Before 열 */}
-                  <div className={`flex-1 p-2 border-r border-slate-200 ${beforeBgColor} hover:bg-opacity-80 transition-colors overflow-auto whitespace-pre-wrap break-words`}>
-                    <pre className={`m-0 ${beforeTextColor}`}>
-                      {beforeLine?.content || ''}
-                    </pre>
-                  </div>
-
-                  {/* After 열 */}
-                  <div className={`flex-1 p-2 ${afterBgColor} hover:bg-opacity-80 transition-colors overflow-auto whitespace-pre-wrap break-words`}>
-                    <pre className={`m-0 ${afterTextColor}`}>
-                      {afterLine?.content || ''}
-                    </pre>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+          </Wrapper>
+        )}
+      </div>
     </PageLayout>
   );
 }
