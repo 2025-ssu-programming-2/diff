@@ -17,6 +17,12 @@ declare const Module: {
 
 export type IndexPageProps = Omit<React.ComponentProps<'div'>, 'children'> & {};
 
+type WordToken = {
+  op: 'equal' | 'delete' | 'insert';
+  left: string;
+  right: string;
+};
+
 type WasmDiffItem = {
   op: 'equal' | 'delete' | 'insert' | 'replace';
   left: string;
@@ -25,6 +31,7 @@ type WasmDiffItem = {
   left_end: number;
   right_start: number;
   right_end: number;
+  tokens: WordToken[];
 };
 
 type WasmDiffResponse = {
@@ -37,6 +44,7 @@ type DiffLine = {
   lineNum: number | null;
   charStart?: number;
   charEnd?: number;
+  tokens?: WordToken[];
 };
 
 type DiffPair = {
@@ -85,6 +93,7 @@ const parseDiffOutput = (diffOutput: string): DiffPair[] => {
             lineNum: beforeLineNum,
             charStart: item.left_start >= 0 ? item.left_start : undefined,
             charEnd: item.left_end >= 0 ? item.left_end : undefined,
+            tokens: item.tokens,
           },
           after: {
             type: 'change',
@@ -92,6 +101,7 @@ const parseDiffOutput = (diffOutput: string): DiffPair[] => {
             lineNum: afterLineNum,
             charStart: item.right_start >= 0 ? item.right_start : undefined,
             charEnd: item.right_end >= 0 ? item.right_end : undefined,
+            tokens: item.tokens,
           },
         });
         beforeLineNum++;
@@ -259,6 +269,68 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
                   const beforeLine = pair.before;
                   const afterLine = pair.after;
 
+                  // 토큰 기반 렌더링 함수
+                  const renderWithTokens = (line: DiffLine | null, isLeft: boolean) => {
+                    if (!line) return '';
+
+                    // tokens이 있으면 토큰 기반으로 렌더링
+                    if (line.tokens && line.tokens.length > 0) {
+                      const elements: (React.ReactNode)[] = [];
+                      const contentStr = line.content;
+                      let contentIdx = 0;
+
+                      line.tokens.forEach((token, tokenIdx) => {
+                        const isDeleted = isLeft && token.op === 'delete';
+                        const isInserted = !isLeft && token.op === 'insert';
+                        const isEqual = token.op === 'equal';
+
+                        let wordContent = '';
+                        let element: React.ReactNode = null;
+
+                        if (isEqual) {
+                          wordContent = token[isLeft ? 'left' : 'right'];
+                          element = <span key={tokenIdx}>{wordContent}</span>;
+                        } else if (isDeleted) {
+                          wordContent = token.left;
+                          element = (
+                            <span key={tokenIdx} className="bg-red-300 font-semibold">
+                              {wordContent}
+                            </span>
+                          );
+                        } else if (isInserted) {
+                          wordContent = token.right;
+                          element = (
+                            <span key={tokenIdx} className="bg-green-300 font-semibold">
+                              {wordContent}
+                            </span>
+                          );
+                        }
+                        // token.op === 'delete' && !isLeft, 또는 token.op === 'insert' && isLeft: 표시 안함
+
+                        if (element) {
+                          // 원본 content에서 현재 단어를 찾아서 앞의 띄어쓰기 포함
+                          const wordPos = contentStr.indexOf(wordContent, contentIdx);
+                          if (wordPos >= 0 && wordPos > contentIdx) {
+                            // 단어 앞에 있는 모든 문자(주로 스페이스) 추가
+                            elements.push(contentStr.substring(contentIdx, wordPos));
+                            contentIdx = wordPos + wordContent.length;
+                          }
+                          elements.push(element);
+                          contentIdx = Math.max(contentIdx, wordPos + wordContent.length);
+                        }
+                      });
+
+                      // 남은 부분 (단어 뒤의 띄어쓰기 등)
+                      if (contentIdx < contentStr.length) {
+                        elements.push(contentStr.substring(contentIdx));
+                      }
+
+                      return <>{elements}</>;
+                    }
+
+                    return line.content;
+                  };
+
                   // 스타일 결정
                   const beforeBgColor =
                     pair.type === 'delete' ? 'bg-red-50' : pair.type === 'change' ? 'bg-yellow-50' : 'bg-white';
@@ -295,14 +367,18 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
                       <div
                         className={`flex-1 border-r border-slate-200 p-2 ${beforeBgColor} hover:bg-opacity-80 overflow-auto break-words whitespace-pre-wrap transition-colors`}
                       >
-                        <pre className={`m-0 ${beforeTextColor}`}>{beforeLine?.content || ''}</pre>
+                        <pre className={`m-0 ${beforeTextColor}`}>
+                          {beforeLine ? renderWithTokens(beforeLine, true) : ''}
+                        </pre>
                       </div>
 
                       {/* After 열 */}
                       <div
                         className={`flex-1 p-2 ${afterBgColor} hover:bg-opacity-80 overflow-auto break-words whitespace-pre-wrap transition-colors`}
                       >
-                        <pre className={`m-0 ${afterTextColor}`}>{afterLine?.content || ''}</pre>
+                        <pre className={`m-0 ${afterTextColor}`}>
+                          {afterLine ? renderWithTokens(afterLine, false) : ''}
+                        </pre>
                       </div>
                     </div>
                   );
