@@ -9,3 +9,6 @@ cpp/cmake-build-debug
 cpp/build
 build
 .cache
+
+# Test data
+.dummy

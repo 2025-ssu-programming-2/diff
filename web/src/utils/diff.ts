@@ -1,17 +1,17 @@
-type WordToken = {
+export type WordToken = {
   op: 'equal' | 'delete' | 'insert';
   left: string;
   right: string;
 };
 
-type WasmDiffItem = {
+export type WasmDiffItem = {
   op: 'equal' | 'delete' | 'insert' | 'replace';
   left: string;
   right: string;
-  left_start: number;
-  left_end: number;
-  right_start: number;
-  right_end: number;
+  left_start?: number;
+  left_end?: number;
+  right_start?: number;
+  right_end?: number;
   tokens: WordToken[];
 };
 
@@ -34,9 +34,9 @@ export type DiffPair = {
   after: DiffLine | null;
 };
 
-export const parseDiffOutput = (diffOutput: string): DiffPair[] => {
+export const parseDiffOutput = (diffOutput: string | WasmDiffResponse): DiffPair[] => {
   try {
-    const data: WasmDiffResponse = JSON.parse(diffOutput);
+    const data: WasmDiffResponse = typeof diffOutput === 'string' ? JSON.parse(diffOutput) : diffOutput;
     const pairs: DiffPair[] = [];
     let beforeLineNum = 0;
     let afterLineNum = 0;
@@ -72,16 +72,16 @@ export const parseDiffOutput = (diffOutput: string): DiffPair[] => {
             type: 'change',
             content: item.left,
             lineNum: beforeLineNum,
-            charStart: item.left_start >= 0 ? item.left_start : undefined,
-            charEnd: item.left_end >= 0 ? item.left_end : undefined,
+            charStart: item.left_start !== undefined && item.left_start >= 0 ? item.left_start : undefined,
+            charEnd: item.left_end !== undefined && item.left_end >= 0 ? item.left_end : undefined,
             tokens: item.tokens,
           },
           after: {
             type: 'change',
             content: item.right,
             lineNum: afterLineNum,
-            charStart: item.right_start >= 0 ? item.right_start : undefined,
-            charEnd: item.right_end >= 0 ? item.right_end : undefined,
+            charStart: item.right_start !== undefined && item.right_start >= 0 ? item.right_start : undefined,
+            charEnd: item.right_end !== undefined && item.right_end >= 0 ? item.right_end : undefined,
             tokens: item.tokens,
           },
         });

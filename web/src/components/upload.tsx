@@ -21,6 +21,15 @@ export default function Upload({ className, files, onChange, ...props }: UploadP
   const [file2, setFile2] = useState<Nullish<File>>(null);
 
   useEffect(() => {
+    if (files && files.length) {
+      return;
+    }
+
+    setFile1(null);
+    setFile2(null);
+  }, [files]);
+
+  useEffect(() => {
     if (!file1 || !file2) {
       return;
     }
