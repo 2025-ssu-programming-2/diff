@@ -9,6 +9,9 @@ import { Button } from '@/components/shadcn/button.tsx';
 import { Loader } from 'lucide-react';
 import { parseDiffOutput, type DiffPair, type DiffLine } from '@/utils/diff';
 import DiffContainer from '@/components/diff-container';
+import { diffTextJs } from '@/utils/algorithm';
+import { Label } from '@/components/shadcn/label';
+import { RadioGroup, RadioGroupItem } from '@/components/shadcn/radio-group';
 
 export type IndexPageProps = Omit<React.ComponentProps<'div'>, 'children'> & {};
 
@@ -16,6 +19,8 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
   const [files, setFiles] = useState<Nullish<File[]>>(null);
   const [diffView, setDiffView] = useState<Nullish<DiffPair[]>>(null);
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'cpp' | 'js'>('cpp');
+  const [execTime, setExecTime] = useState<number | null>(null);
 
   const handleCompare = async () => {
     if (!files || files.length < 2) {
@@ -25,50 +30,68 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
 
     try {
       setLoading(true);
+      setExecTime(null);
 
       // 파일 읽기
       const baseText = await files[0].text();
       const changedText = await files[1].text();
 
-      // 문자열을 WASM 메모리에 할당
-      const baseTextPtr = Module.allocateUTF8(baseText);
-      const changedTextPtr = Module.allocateUTF8(changedText);
+      const startTime = performance.now();
+      let result: string | ReturnType<typeof diffTextJs> | null = null;
 
-      if (!baseTextPtr || !changedTextPtr) {
-        console.error('메모리 할당 실패');
-        setLoading(false);
-        return;
+      if (mode === 'cpp') {
+        // 문자열을 WASM 메모리에 할당
+        const baseTextPtr = Module.allocateUTF8(baseText);
+        const changedTextPtr = Module.allocateUTF8(changedText);
+
+        if (!baseTextPtr || !changedTextPtr) {
+          console.error('메모리 할당 실패');
+          setLoading(false);
+          return;
+        }
+
+        // _diff_text 호출 (반환값은 포인터)
+        const resultPtr = Module._diff_text(baseTextPtr, changedTextPtr);
+
+        if (resultPtr) {
+          // 반환된 포인터를 문자열로 변환
+          result = Module.UTF8ToString(resultPtr);
+          console.log('diff 결과 문자열:', result);
+        } else {
+          console.log('diff_text 반환한 포인터가 유효하지 않습니다');
+        }
+
+        // 할당한 메모리 해제
+        if (baseTextPtr) Module._free(baseTextPtr);
+        if (changedTextPtr) Module._free(changedTextPtr);
+      } else {
+        // JS execution
+        result = diffTextJs(baseText, changedText);
       }
 
-      // _diff_text 호출 (반환값은 포인터)
-      const resultPtr = Module._diff_text(baseTextPtr, changedTextPtr);
+      const endTime = performance.now();
+      setExecTime((endTime - startTime) / 1000);
 
-      if (resultPtr) {
-        // 반환된 포인터를 문자열로 변환
-        const result = Module.UTF8ToString(resultPtr);
-        console.log('diff 결과 문자열:', result);
-        if (result) {
-          const diffData = parseDiffOutput(result);
-          console.log('파싱된 diffData:', diffData);
-          setDiffView(diffData);
-        } else {
-          console.log('UTF8ToString 실패');
-          setDiffView(null);
-        }
+      if (result) {
+        const diffData = parseDiffOutput(result);
+        console.log('파싱된 diffData:', diffData);
+        setDiffView(diffData);
       } else {
-        console.log('diff_text 반환한 포인터가 유효하지 않습니다');
         setDiffView(null);
       }
-
-      // 할당한 메모리 해제
-      if (baseTextPtr) Module._free(baseTextPtr);
-      if (changedTextPtr) Module._free(changedTextPtr);
     } catch (e) {
       console.error('호출 실패:', e);
       setDiffView(null);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleModeChange = (val: 'cpp' | 'js') => {
+    setMode(val);
+    setFiles(null);
+    setDiffView(null);
+    setExecTime(null);
   };
 
   return (
@@ -87,6 +110,24 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
     >
       <div className="flex w-full flex-col gap-4">
         <div className="w-full">
+          <RadioGroup
+            value={mode}
+            onValueChange={(val) => handleModeChange(val as 'cpp' | 'js')}
+            className="mb-4 flex justify-start gap-4"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="cpp" id="mode-cpp" />
+              <Label htmlFor="mode-cpp" className="cursor-pointer font-medium text-slate-700">
+                C++로 비교하기
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="js" id="mode-js" />
+              <Label htmlFor="mode-js" className="cursor-pointer font-medium text-slate-700">
+                JS로 비교하기
+              </Label>
+            </div>
+          </RadioGroup>
           <Upload files={files} onChange={setFiles} />
           {files && (
             <Button variant="outline" className="h-[46px] w-full" onClick={handleCompare} disabled={loading}>
@@ -97,7 +138,13 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
 
         <DiffContainer loading={loading}>
           {diffView && diffView.length > 0 && (
-            <Wrapper title="검출 결과">
+            <Wrapper
+              title={
+                execTime !== null
+                  ? `검출 결과 (${mode === 'cpp' ? 'C++' : 'JS'}: ${execTime.toFixed(3)}초 수행함)`
+                  : '검출 결과'
+              }
+            >
               <div className="w-full py-4">
                 <div className="overflow-hidden rounded-lg border border-slate-300 font-mono text-sm shadow-sm">
                   {/* 헤더 행: Line | Before | After */}
