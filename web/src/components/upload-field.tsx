@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { type ChangeEvent, useCallback, useRef } from 'react';
+import { type ChangeEvent, useCallback, useRef, useEffect } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/shadcn.ts';
 import { Input } from '@/components/shadcn/input.tsx';
@@ -19,6 +19,13 @@ export type UploadFieldProps = Omit<React.ComponentProps<'div'>, 'children' | 'o
 
 export default function UploadField({ className, file, onChange, ...props }: UploadFieldProps) {
   const inputRef = useRef<Nullish<HTMLInputElement>>(null);
+
+  // file이 null이 되면 input 값을 리셋
+  useEffect(() => {
+    if (!file && inputRef.current) {
+      inputRef.current.value = '';
+    }
+  }, [file]);
 
   const onElementClick = useCallback(() => {
     if (!inputRef || !inputRef?.current) {
