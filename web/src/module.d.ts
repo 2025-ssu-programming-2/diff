@@ -23,7 +23,7 @@ declare const Module: {
    * @param args 인자 값들의 배열
    * @param opts 옵션 객체 (선택 사항)
    */
-  ccall: (ident: string, returnType: string | null, argTypes: string[], args: any[], opts?: any) => any;
+  ccall: (ident: string, returnType: string | null, argTypes: string[], args: unknown[], opts?: unknown) => unknown;
 
   /**
    * C 함수를 자바스크립트 함수처럼 래핑하여 반환합니다.
@@ -32,7 +32,12 @@ declare const Module: {
    * @param argTypes 인자 타입들의 배열
    * @param opts 옵션 객체
    */
-  cwrap: (ident: string, returnType: string | null, argTypes: string[], opts?: any) => (...args: any[]) => any;
+  cwrap: (
+    ident: string,
+    returnType: string | null,
+    argTypes: string[],
+    opts?: unknown,
+  ) => (...args: unknown[]) => unknown;
 
   /**
    * WASM 힙 메모리(HEAPU8)에 있는 null-terminated UTF8 문자열을 자바스크립트 문자열로 변환합니다.
@@ -48,4 +53,41 @@ declare const Module: {
    * (내부적으로 stringToNewUTF8을 호출합니다)
    */
   allocateUTF8: (str: string) => number;
+
+  /**
+   * WASM 힙 메모리에 대한 Uint8Array 뷰
+   * SharedArrayBuffer와 함께 사용할 때 직접 메모리 접근에 활용
+   */
+  HEAPU8: Uint8Array;
+
+  /**
+   * WASM 힙 메모리에 대한 Int8Array 뷰
+   */
+  HEAP8: Int8Array;
+
+  /**
+   * WASM 힙 메모리에 대한 Uint32Array 뷰
+   */
+  HEAPU32: Uint32Array;
+
+  /**
+   * WASM 힙 메모리에 대한 Int32Array 뷰
+   */
+  HEAP32: Int32Array;
+
+  /**
+   * 자바스크립트 문자열을 WASM 힙 메모리의 특정 위치에 UTF8로 인코딩하여 씁니다.
+   * @param str 인코딩할 문자열
+   * @param outPtr 출력 위치 (WASM 힙의 포인터)
+   * @param maxBytesToWrite 최대 쓰기 바이트 수
+   * @returns 실제로 쓴 바이트 수
+   */
+  stringToUTF8: (str: string, outPtr: number, maxBytesToWrite: number) => number;
+
+  /**
+   * 문자열을 UTF8로 인코딩했을 때의 바이트 길이를 반환합니다.
+   * @param str 길이를 계산할 문자열
+   * @returns UTF8 인코딩 시 바이트 수 (null terminator 제외)
+   */
+  lengthBytesUTF8: (str: string) => number;
 };
