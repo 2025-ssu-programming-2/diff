@@ -5,7 +5,7 @@
 이 프로젝트는 숭실대학교 2025년 2학기 미디어경영학과 프로그래밍2 수업의 기말고사 프로젝트입니다. <br />
 C++, WASM을 사용하여 고속으로 대용량 텍스트 파일의 다른 부분(diff)를 찾아내어 보기좋게 제공합니다.
 
-## (팀명)
+## 팀: "차이점"
 - 최강재, 팀장
 - 류현서
 - 임소연
@@ -18,17 +18,14 @@ C++, WASM을 사용하여 고속으로 대용량 텍스트 파일의 다른 부�
 $ git clone https://github.com/emscripten-core/emsdk.git
 $ cd emsdk
 ```
-
 2. `emsdk` 최신 버전 설치
 ```shell
 $ ./emsdk install latest
 ```
-
 3. `emsdk` 활성화
 ```shell
 $ ./emsdk activate latest
 ```
-
 4. 현재 Shell에서 `emsdk` 환경변수 설정
 ```shell
 $ source ./emsdk_env.sh # for Linux, macOS
@@ -68,7 +65,7 @@ $ brew install cmake
 `.env`내 환경 변수를 작성해주세요.
 
 ```shell
-EXPORTED_FUNCTIONS=["_test_console"] # 공개할 함수를 작성
+EXPORTED_FUNCTIONS=["_example_function"] # 공개할 함수를 작성
 EXPORTED_RUNTIME_METHODS=["ccall"] # Runtime에서 사용할 Method를 작성
 ```
 
@@ -76,11 +73,6 @@ EXPORTED_RUNTIME_METHODS=["ccall"] # Runtime에서 사용할 Method를 작성
 **Windows(PowerShell)**
 ```shell
 # 단독 실행
-$ .\build.ps1
-
-# 추가 환경 변수와 함께 실행
-$ $env:EXPORTED_FUNCTIONS='["_test_console","_another_func"]'
-$ $env:EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]'
 $ .\build.ps1
 ```
 
@@ -102,26 +94,42 @@ $ sh build.sh
 
 ### Web 환경설정 및 코드 빌드
 1. `web/` 으로 이동해주세요.
+```
+$ cd web
+```
 2. 의존성 패키지를 설치해주세요.
 ```shell
 $ bun install
 ```
 3. 빌드
+dist/ 이름으로 빌드 결과가 생성됩니다. <br />
+자동으로 post-build.ts 코드가 실행됩니다. ROOT로 빌드의 결과를 복사합니다.
 ```shell
-$ bun run build # dist/ 이름으로 빌드 결과가 생성됩니다. 
+$ bun run build 
+# rolldown-vite v7.2.2 building client environment for production...
+# ✓ 1714 modules transformed.
+# dist/index.html                 0.68 kB │ gzip:  0.43 kB
+# dist/assets/index-bFXQOtsH.css  34.90 kB │ gzip:  7.60 kB
+# dist/assets/index-CTF6wdsv.js   261.75 kB │ gzip: 82.02 kB
+# ✓ built in 179ms
+# Start 'post-build' process...
+# Copy ./dist to /.diff-app...
+# Done!
 ```
 
 ### 실행
-`8080`Port으로 Serving됩니다. <br />
-브라우저에서 `localhost:8080`으로 접속해주세요.
-
+`8080`Port로 Serving됩니다. <br />
 ```shell
-$ python -m http.server -d web/dist/ 8080
-# Serving HTTP on :: port 8080 (http://[::]:8080/) ...
+$ bun dev # or bun run dev
+# ROLLDOWN-VITE v7.2.2  ready in 198 ms
+#
+# ➜  Local:   http://localhost:3000/
+# ➜  Network: use --host to expose
+# ➜  press h + enter to show help
 ```
 
 ### 결과
-[/.diff-app](https://github.com/2025-ssu-programming-2/diff/tree/develop/.diff-app) 에서 확인하실 수 있습니다.
+[/.diff-app](https://github.com/2025-ssu-programming-2/diff/tree/develop/.diff-app) 에서 빌드 결과를 확인하실 수 있습니다.
 
 ## 역할 분담
 - 최강재(팀장)
