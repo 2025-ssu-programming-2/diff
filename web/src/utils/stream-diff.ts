@@ -1,12 +1,9 @@
-/**
- * 스트리밍 Diff 유틸리티
- * 대용량 파일을 청크 단위로 처리하여 메모리 효율적인 diff 연산 수행
- */
-
 import type { WasmDiffResponse, WasmDiffItem } from './diff';
 import { diffTextJs } from './algorithm';
+import { PerformanceTracker, type PerformanceMetrics, type WasmOverheadTiming } from './performance';
+import { processWasmChunkOptimized, getOptimizationStatus } from './wasm-optimized';
 
-// 청크 설정: 라인 수 기준 (500줄씩 처리 - 더 작은 청크로 안정성 확보)
+// 청크 설정: 라인 수 기준 (500줄씩 처리)
 export const CHUNK_SIZE_LINES = 500;
 
 /**
@@ -56,6 +53,14 @@ export interface ChunkInfo {
 export type ProgressCallback = (progress: { current: number; total: number; percentage: number }) => void;
 
 /**
+ * 스트리밍 Diff 결과 타입 (성능 메트릭 포함)
+ */
+export interface StreamDiffResult {
+  response: WasmDiffResponse;
+  metrics: PerformanceMetrics;
+}
+
+/**
  * 파일을 청크로 분할
  */
 export function splitIntoChunks(
@@ -92,28 +97,55 @@ function yieldToMain(): Promise<void> {
 }
 
 /**
- * JS 모드: 청크 단위 스트리밍 diff 처리
+ * JS 모드: 청크 단위 스트리밍 diff 처리 (성능 측정 포함)
  */
 export async function streamDiffJs(
   baseText: string,
   compareText: string,
   onProgress?: ProgressCallback,
-): Promise<WasmDiffResponse> {
+): Promise<StreamDiffResult> {
+  const tracker = new PerformanceTracker('js');
+  tracker.start();
+
+  // 파일 크기 기록
+  tracker.setFileSizes(new Blob([baseText]).size, new Blob([compareText]).size);
+
+  // 청크 분할 시작
+  tracker.startPhase('chunkSplit');
   const baseLines = splitLines(baseText);
   const compareLines = splitLines(compareText);
 
   // 작은 파일은 직접 처리
   if (baseLines.length <= CHUNK_SIZE_LINES && compareLines.length <= CHUNK_SIZE_LINES) {
+    tracker.endPhase('chunkSplit');
+    tracker.setChunkCount(1);
+
     if (onProgress) {
       onProgress({ current: 1, total: 1, percentage: 100 });
     }
-    return diffTextJs(baseText, compareText);
+
+    // Diff 연산 시작
+    tracker.startPhase('diffProcess');
+    const chunkStart = performance.now();
+    const response = diffTextJs(baseText, compareText);
+    const chunkDuration = performance.now() - chunkStart;
+    tracker.recordChunkTime(0, chunkDuration);
+    tracker.endPhase('diffProcess');
+
+    const metrics = tracker.finalize();
+    return { response, metrics };
   }
 
   const chunks = splitIntoChunks(baseLines, compareLines);
+  tracker.endPhase('chunkSplit');
+  tracker.setChunkCount(chunks.length);
+
   const allRows: WasmDiffItem[] = [];
 
   console.log(`[JS] 총 ${chunks.length}개 청크로 분할하여 처리 시작`);
+
+  // Diff 연산 시작
+  tracker.startPhase('diffProcess');
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
@@ -131,7 +163,10 @@ export async function streamDiffJs(
     const chunkBaseText = joinLines(chunk.baseLines);
     const chunkCompareText = joinLines(chunk.compareLines);
 
+    const chunkStart = performance.now();
     const result = diffTextJs(chunkBaseText, chunkCompareText);
+    const chunkDuration = performance.now() - chunkStart;
+    tracker.recordChunkTime(i, chunkDuration);
 
     // 결과 병합
     allRows.push(...result.rows);
@@ -140,8 +175,14 @@ export async function streamDiffJs(
     await yieldToMain();
   }
 
+  tracker.endPhase('diffProcess');
+
   console.log(`[JS] 처리 완료: ${allRows.length}개 행`);
-  return { rows: allRows };
+
+  const response = { rows: allRows };
+  const metrics = tracker.finalize();
+
+  return { response, metrics };
 }
 
 /**
@@ -150,7 +191,16 @@ export async function streamDiffJs(
 function isWasmModuleReady(): boolean {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const module = (window as any).Module;
-  return !!(module && module._diff_text && module.allocateUTF8 && module.UTF8ToString && module._free);
+  return !!(module && module._diff_text && module.HEAPU8 && module._malloc && module._free);
+}
+
+/**
+ * 최적화 모드 사용 가능 여부 확인
+ */
+function isOptimizedModeAvailable(): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const module = (window as any).Module;
+  return !!(module && module.HEAPU8 && module._malloc);
 }
 
 /**
@@ -163,9 +213,18 @@ export interface WasmStreamDiffOptions {
 }
 
 /**
- * WASM 단일 청크 처리 (타임아웃 포함)
+ * WASM 청크 처리 결과 (타이밍 정보 포함)
  */
-function processWasmChunk(baseText: string, compareText: string, timeoutMs: number = 30000): Promise<WasmDiffResponse> {
+interface WasmChunkResult {
+  response: WasmDiffResponse;
+  pureAlgorithmTime: number; // 순수 C++ 알고리즘 실행 시간
+  overhead: WasmOverheadTiming; // WASM 오버헤드
+}
+
+/**
+ * WASM 단일 청크 처리 (타임아웃 포함, 세부 타이밍 측정)
+ */
+function processWasmChunk(baseText: string, compareText: string, timeoutMs: number = 30000): Promise<WasmChunkResult> {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       reject(new Error('WASM 청크 처리 타임아웃'));
@@ -181,9 +240,11 @@ function processWasmChunk(baseText: string, compareText: string, timeoutMs: numb
         return;
       }
 
-      // 문자열을 WASM 메모리에 할당
+      // 1. 메모리 할당 시간 측정
+      const memAllocStart = performance.now();
       const baseTextPtr = module.allocateUTF8(baseText);
       const changedTextPtr = module.allocateUTF8(compareText);
+      const memAllocTime = performance.now() - memAllocStart;
 
       if (!baseTextPtr || !changedTextPtr) {
         clearTimeout(timeoutId);
@@ -194,19 +255,38 @@ function processWasmChunk(baseText: string, compareText: string, timeoutMs: numb
       }
 
       try {
-        // _diff_text 호출
+        // 2. 순수 C++ 알고리즘 실행 시간 측정
+        const algorithmStart = performance.now();
         const resultPtr = module._diff_text(baseTextPtr, changedTextPtr);
+        const pureAlgorithmTime = performance.now() - algorithmStart;
 
         if (resultPtr) {
+          // 3. 문자열 변환 시간 측정
+          const strConvertStart = performance.now();
           const resultStr = module.UTF8ToString(resultPtr);
+          const strConvertTime = performance.now() - strConvertStart;
+
+          // 4. JSON 파싱 시간 측정
+          const jsonParseStart = performance.now();
+          const response = JSON.parse(resultStr);
+          const jsonParseTime = performance.now() - jsonParseStart;
+
           clearTimeout(timeoutId);
-          resolve(JSON.parse(resultStr));
+          resolve({
+            response,
+            pureAlgorithmTime,
+            overhead: {
+              memoryAlloc: memAllocTime,
+              stringConvert: strConvertTime,
+              jsonParse: jsonParseTime,
+            },
+          });
         } else {
           clearTimeout(timeoutId);
           reject(new Error('diff_text 반환한 포인터가 유효하지 않습니다'));
         }
       } finally {
-        // 메모리 해제
+        // 메모리 해제 (오버헤드에 포함하지 않음 - 결과 반환 후 수행)
         if (baseTextPtr) module._free(baseTextPtr);
         if (changedTextPtr) module._free(changedTextPtr);
       }
@@ -218,10 +298,16 @@ function processWasmChunk(baseText: string, compareText: string, timeoutMs: numb
 }
 
 /**
- * WASM 모드 스트리밍 diff (메인 스레드에서 사용)
+ * WASM 모드 스트리밍 diff (최적화된 메모리 접근 사용)
  */
-export async function streamDiffWasm(options: WasmStreamDiffOptions): Promise<WasmDiffResponse> {
+export async function streamDiffWasm(options: WasmStreamDiffOptions): Promise<StreamDiffResult> {
   const { baseText, compareText, onProgress } = options;
+
+  const tracker = new PerformanceTracker('cpp');
+  tracker.start();
+
+  // 파일 크기 기록
+  tracker.setFileSizes(new Blob([baseText]).size, new Blob([compareText]).size);
 
   // WASM 모듈 준비 확인
   if (!isWasmModuleReady()) {
@@ -229,27 +315,70 @@ export async function streamDiffWasm(options: WasmStreamDiffOptions): Promise<Wa
     return streamDiffJs(baseText, compareText, onProgress);
   }
 
+  // 최적화 모드 사용 가능 여부 확인
+  const useOptimized = isOptimizedModeAvailable();
+  const optimizationStatus = getOptimizationStatus();
+
+  console.log(`[WASM] 최적화 모드: ${useOptimized ? '활성화' : '비활성화'}`);
+  console.log(`[WASM] 메모리 풀: ${optimizationStatus.memoryPoolActive ? '활성' : '비활성'}`);
+  console.log(`[WASM] SharedArrayBuffer: ${optimizationStatus.sharedArrayBufferSupported ? '지원' : '미지원'}`);
+
+  // 청크 분할 시작
+  tracker.startPhase('chunkSplit');
   const baseLines = splitLines(baseText);
   const compareLines = splitLines(compareText);
 
   // 작은 파일은 직접 WASM 호출
   if (baseLines.length <= CHUNK_SIZE_LINES && compareLines.length <= CHUNK_SIZE_LINES) {
+    tracker.endPhase('chunkSplit');
+    tracker.setChunkCount(1);
+
     if (onProgress) {
       onProgress({ current: 1, total: 1, percentage: 100 });
     }
+
+    tracker.startPhase('diffProcess');
     try {
-      return await processWasmChunk(baseText, compareText);
+      const chunkStart = performance.now();
+
+      // 최적화된 버전 사용 (메모리 풀 + 직접 메모리 접근)
+      const result = useOptimized
+        ? await processWasmChunkOptimized(baseText, compareText)
+        : await processWasmChunk(baseText, compareText);
+
+      const chunkDuration = performance.now() - chunkStart;
+
+      // 순수 알고리즘 시간과 오버헤드 기록
+      tracker.recordChunkTime(0, chunkDuration, result.pureAlgorithmTime);
+      tracker.recordWasmOverhead(result.overhead);
+      tracker.endPhase('diffProcess');
+
+      const metrics = tracker.finalize();
+      return { response: result.response, metrics };
     } catch (error) {
       console.error('WASM 처리 실패, JS로 폴백:', error);
-      return diffTextJs(baseText, compareText);
+      const chunkStart = performance.now();
+      const response = diffTextJs(baseText, compareText);
+      const chunkDuration = performance.now() - chunkStart;
+      tracker.recordChunkTime(0, chunkDuration, chunkDuration);
+      tracker.endPhase('diffProcess');
+
+      const metrics = tracker.finalize();
+      return { response, metrics };
     }
   }
 
   // 청크 분할
   const chunks = splitIntoChunks(baseLines, compareLines);
+  tracker.endPhase('chunkSplit');
+  tracker.setChunkCount(chunks.length);
+
   const allRows: WasmDiffItem[] = [];
 
   console.log(`[WASM] 총 ${chunks.length}개 청크로 분할하여 처리 시작`);
+
+  // Diff 연산 시작
+  tracker.startPhase('diffProcess');
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
@@ -268,13 +397,26 @@ export async function streamDiffWasm(options: WasmStreamDiffOptions): Promise<Wa
     const chunkCompareText = joinLines(chunk.compareLines);
 
     try {
-      // WASM diff 수행 (타임아웃 포함)
-      const result = await processWasmChunk(chunkBaseText, chunkCompareText);
-      allRows.push(...result.rows);
+      const chunkStart = performance.now();
+
+      // 최적화된 버전 사용 (메모리 풀 재사용)
+      const result = useOptimized
+        ? await processWasmChunkOptimized(chunkBaseText, chunkCompareText)
+        : await processWasmChunk(chunkBaseText, chunkCompareText);
+
+      const chunkDuration = performance.now() - chunkStart;
+
+      // 순수 알고리즘 시간과 오버헤드 기록
+      tracker.recordChunkTime(i, chunkDuration, result.pureAlgorithmTime);
+      tracker.recordWasmOverhead(result.overhead);
+      allRows.push(...result.response.rows);
     } catch (error) {
       console.error(`청크 ${i + 1} WASM 처리 실패, JS로 폴백:`, error);
       // 실패한 청크는 JS로 처리
+      const chunkStart = performance.now();
       const fallbackResult = diffTextJs(chunkBaseText, chunkCompareText);
+      const chunkDuration = performance.now() - chunkStart;
+      tracker.recordChunkTime(i, chunkDuration, chunkDuration);
       allRows.push(...fallbackResult.rows);
     }
 
@@ -282,6 +424,12 @@ export async function streamDiffWasm(options: WasmStreamDiffOptions): Promise<Wa
     await yieldToMain();
   }
 
+  tracker.endPhase('diffProcess');
+
   console.log(`[WASM] 처리 완료: ${allRows.length}개 행`);
-  return { rows: allRows };
+
+  const response = { rows: allRows };
+  const metrics = tracker.finalize();
+
+  return { response, metrics };
 }
