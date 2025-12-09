@@ -7,7 +7,6 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 3000,
-    // SharedArrayBuffer 사용을 위한 Cross-Origin 헤더 설정
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -24,9 +23,5 @@ export default defineConfig({
     // Static site로 배포 가능하도록 설정
     emptyOutDir: true,
     copyPublicDir: true,
-  },
-  // Web Worker 빌드 설정
-  worker: {
-    format: 'es',
   },
 });

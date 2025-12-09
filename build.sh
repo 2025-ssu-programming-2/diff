@@ -53,6 +53,9 @@ EXPORTED_RUNTIME_METHODS="${EXPORTED_RUNTIME_METHODS:-[\"ccall\",\"cwrap\",\"all
 echo "${YELLOW}Build C++ code...${RESET}"
 
 $EMCC_CMD cpp/src/main.cpp -o web/public/main.js \
+  -pthread \
+  -s SHARED_MEMORY=1 \
+  -s USE_PTHREADS=1 \
   -s EXPORTED_FUNCTIONS="$EXPORTED_FUNCTIONS" \
   -s EXPORTED_RUNTIME_METHODS="$EXPORTED_RUNTIME_METHODS" \
   -s ALLOW_MEMORY_GROWTH=1 &

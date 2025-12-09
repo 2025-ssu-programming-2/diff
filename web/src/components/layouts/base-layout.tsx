@@ -5,7 +5,7 @@ export type BaseLayoutProps = React.ComponentProps<'div'> & {};
 
 export default function BaseLayout({ children, className, ...props }: BaseLayoutProps) {
   return (
-    <div className={cn('mx-auto w-full max-w-4xl', className)} {...props}>
+    <div className={cn('mx-auto w-full max-w-5xl', className)} {...props}>
       {children}
     </div>
   );
