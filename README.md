@@ -143,7 +143,7 @@ $ bun run build
 ```
 
 ### 실행
-`8080`Port로 Serving됩니다. <br />
+`3000`Port로 Serving됩니다. <br />
 ```shell
 $ bun dev # or bun run dev
 # ROLLDOWN-VITE v7.2.2  ready in 198 ms
