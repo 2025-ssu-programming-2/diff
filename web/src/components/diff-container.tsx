@@ -1,6 +1,6 @@
 import { cn } from '@/utils/shadcn';
 import * as React from 'react';
-import { Skeleton } from './shadcn/skeleton';
+import { Skeleton } from '@/components/shadcn/skeleton';
 
 type DiffContainerProps = React.ComponentProps<'div'> & {
   loading: boolean;
@@ -8,7 +8,7 @@ type DiffContainerProps = React.ComponentProps<'div'> & {
 
 export default function DiffContainer({ children, className, loading, ...props }: DiffContainerProps) {
   return (
-    <div className={cn('h-36 w-full', className)} {...props}>
+    <div className={cn('flex h-36 w-full flex-col gap-4', className)} {...props}>
       {loading ? (
         <div className="flex w-full flex-col gap-4">
           <Skeleton className="h-[30px] w-[580px]" />

@@ -6,12 +6,14 @@ import Wrapper from '@/components/wrapper';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { Nullish } from '@/types/common.ts';
 import { Button } from '@/components/shadcn/button.tsx';
-import { Loader, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
 import { parseDiffOutput, type DiffPair, type DiffLine } from '@/utils/diff';
 import DiffContainer from '@/components/diff-container';
 import { Label } from '@/components/shadcn/label';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn/radio-group';
-import { streamDiffJs, streamDiffWasm, type ProgressCallback } from '@/utils/stream-diff';
+import { streamDiffJs, streamDiffWasm, type ProgressCallback, type StreamDiffResult } from '@/utils/stream-diff';
+import PerformancePanel from '@/components/performance-panel';
+import { type PerformanceMetrics } from '@/utils/performance';
 
 // 변경사항 앞뒤로 보여줄 컨텍스트 줄 수
 const CONTEXT_LINES = 3;
@@ -41,10 +43,11 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
   const [diffView, setDiffView] = useState<Nullish<DiffPair[]>>(null);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'cpp' | 'js'>('cpp');
-  const [execTime, setExecTime] = useState<number | null>(null);
+  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics | null>(null);
   const [progress, setProgress] = useState<{ current: number; total: number; percentage: number } | null>(null);
   const [expandedHunks, setExpandedHunks] = useState<ExpandedState>({});
   const [maxVisibleLines, setMaxVisibleLines] = useState(MAX_VISIBLE_LINES);
+  const [showPerformancePanel, setShowPerformancePanel] = useState(false);
 
   // 진행 상황 콜백
   const onProgress: ProgressCallback = useCallback((progressInfo) => {
@@ -266,32 +269,59 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
 
     try {
       setLoading(true);
-      setExecTime(null);
+      setPerformanceMetrics(null);
       setProgress(null);
 
-      // 파일 읽기
+      // 파일 읽기 시간 측정
+      const fileReadStart = performance.now();
       const baseText = await files[0].text();
       const changedText = await files[1].text();
+      const fileReadTime = performance.now() - fileReadStart;
 
       console.log(
         `파일 크기: Base=${(baseText.length / 1024).toFixed(2)}KB, Compare=${(changedText.length / 1024).toFixed(2)}KB`,
       );
 
-      const startTime = performance.now();
-
       // 스트리밍 처리를 사용한 diff 연산
-      const result =
+      const streamResult: StreamDiffResult =
         mode === 'cpp'
           ? await streamDiffWasm({ baseText, compareText: changedText, onProgress })
           : await streamDiffJs(baseText, changedText, onProgress);
 
-      const endTime = performance.now();
-      setExecTime((endTime - startTime) / 1000);
+      if (streamResult && streamResult.response) {
+        // 파싱 시간 측정
+        const parseStart = performance.now();
+        const diffData = parseDiffOutput(streamResult.response);
+        const parseTime = performance.now() - parseStart;
 
-      if (result) {
-        const diffData = parseDiffOutput(result);
         console.log('파싱된 diffData:', diffData);
         setDiffView(diffData);
+
+        // 결과 통계 계산
+        const stats = diffData.reduce(
+          (acc, pair) => {
+            if (pair.type === 'add') acc.added++;
+            else if (pair.type === 'delete') acc.deleted++;
+            else if (pair.type === 'change') acc.changed++;
+            return acc;
+          },
+          { added: 0, deleted: 0, changed: 0 },
+        );
+
+        // 성능 메트릭 업데이트 (파일 읽기, 파싱 시간 추가)
+        const updatedMetrics: PerformanceMetrics = {
+          ...streamResult.metrics,
+          fileReadTime,
+          parseTime,
+          totalTime: streamResult.metrics.totalTime + fileReadTime + parseTime,
+          totalLines: diffData.length,
+          addedLines: stats.added,
+          deletedLines: stats.deleted,
+          changedLines: stats.changed,
+        };
+
+        setPerformanceMetrics(updatedMetrics);
+        setShowPerformancePanel(true);
       } else {
         setDiffView(null);
       }
@@ -308,7 +338,8 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
     setMode(val);
     setFiles(null);
     setDiffView(null);
-    setExecTime(null);
+    setPerformanceMetrics(null);
+    setShowPerformancePanel(false);
   };
 
   return (
@@ -367,11 +398,39 @@ export default function IndexPage({ className, ...props }: IndexPageProps) {
         </div>
 
         <DiffContainer loading={loading}>
+          {/* 성능 측정 결과 패널 */}
+          {performanceMetrics && (
+            <Wrapper
+              title={
+                <div className="flex w-full items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    성능 측정 결과
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowPerformancePanel(!showPerformancePanel)}
+                    className="text-xs"
+                  >
+                    {showPerformancePanel ? '접기' : '펼치기'}
+                  </Button>
+                </div>
+              }
+            >
+              {showPerformancePanel && (
+                <div className="py-4">
+                  <PerformancePanel metrics={performanceMetrics} />
+                </div>
+              )}
+            </Wrapper>
+          )}
+
           {diffView && diffView.length > 0 && (
             <Wrapper
               title={
-                execTime !== null
-                  ? `검출 결과 (${mode === 'cpp' ? 'C++' : 'JS'}: ${execTime.toFixed(3)}초 수행함)`
+                performanceMetrics !== null
+                  ? `검출 결과 (${mode === 'cpp' ? 'C++' : 'JS'}: ${(performanceMetrics.totalTime / 1000).toFixed(3)}초 수행함)`
                   : '검출 결과'
               }
             >

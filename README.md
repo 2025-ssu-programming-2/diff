@@ -164,6 +164,7 @@ $ bun dev # or bun run dev
   - 인프라 관리
   - CI/CD 설계 및 개발
   - Web UI/UX 개발
+  - 성능 개선
 - 류현서(팀원)
   - diff 메인 로직 개발
   - diff 프로젝트 의존성 관리
@@ -224,9 +225,7 @@ $ sh build.sh
 내부적으로는 다음과 같은 Emscripten 빌드 명령이 실행됩니다:
 ```bash
 emcc cpp/src/main.cpp -o web/public/main.js \
-  -s EXPORTED_FUNCTIONS="[\"_diff_text\",\"_malloc\",\"_free\"]" \
-  -s EXPORTED_RUNTIME_METHODS="[\"ccall\",\"cwrap\",\"allocateUTF8\",\"UTF8ToString\"]" \
-  -s ALLOW_MEMORY_GROWTH=1
+  ...
 ```
 
 `build.sh` 스크립트의 주요 기능은 다음과 같습니다:
@@ -310,7 +309,6 @@ C++ 코드에서도 다양한 성능 최적화 기법을 적용하였습니다:
 
 **1. 해시 기반 자료구조 활용**
 Myers 알고리즘의 역추적(backtracking) 과정에서 `std::unordered_map`을 사용하여 O(1) 시간 복잡도로 값을 조회합니다:
-
 ```cpp
 // unordered_map<int, int>에서 값 꺼내기 (없으면 기본값)
 int getOrDefault(const unordered_map<int, int>& m, int key, int defaultValue) {
@@ -322,7 +320,6 @@ int getOrDefault(const unordered_map<int, int>& m, int key, int defaultValue) {
 
 **2. 문자열 메모리 사전 할당**
 JSON 이스케이프 처리 시 `reserve()`를 사용하여 문자열의 메모리를 미리 할당함으로써, 문자열 확장 시 발생하는 반복적인 재할당을 방지하였습니다:
-
 ```cpp
 string escapeJson(const string& s) {
     string out;
@@ -334,10 +331,8 @@ string escapeJson(const string& s) {
 
 **3. 정적 변수를 활용한 재할당 방지**
 WASM 함수 호출 시 반환되는 결과 문자열을 `static` 변수로 선언하여, 매 호출마다 새로운 메모리를 할당하는 오버헤드를 제거하였습니다:
-
 ```cpp
 const char* diff_text_impl(const char* baseText, const char* changedText) {
-    // static으로 만들어야 함수가 끝난 뒤에도 포인터가 유효함
     static string result;
     result.clear();
     // ... diff 연산 및 JSON 생성
@@ -348,10 +343,19 @@ const char* diff_text_impl(const char* baseText, const char* changedText) {
 이러한 최적화를 통해 C++ 코드의 실행 속도와 메모리 효율성을 모두 향상시킬 수 있었습니다.
 
 ## 레이턴시 (Latency)
-| 항목 | CPP |  JS |
+**50MB Size 텍스트 파일 테스트 기준**
+| 항목 | C++ |  JS |
 |-----|-----|-----|
-|텍스트 파일 청크(Chunk) 처리|1ms|1ms|
-|텍스트 파일 차이점(Different) 처리|1ms|1ms|
+|총 실행시간|9.206s|5.700s|
+|파일 읽기(I/O)|241.60ms|262.14ms|
+|텍스트 파일 청크(Chunk) 처리(Pre-process)|970.52ms|848.10ms|
+|텍스트 파일 전체 Diff 처리(Diff 연산)|7.842s|4.420s|
+|순수 알고리즘 시간(실제 연산의 속도)|881.76ms||
+|WASM 오버헤드(Diff 연산)|0.00μs||
+|텍스트 평균 청크 처리(Diff 연산)|1.27ms|978.20μs|
+|텍스트 최소 청크 처리(Diff 연산)|160.00μs|200.00μs|
+|텍스트 최대 청크 Diff 처리(Diff 연산)|273.33ms|5.73ms|
+|결과 파싱(Post-process)|7.48ms|11.20ms|
 
 ## P.S.
 ### [Git-flow](https://techblog.woowahan.com/2553/) 전략으로 Branch를 관리합니다.
