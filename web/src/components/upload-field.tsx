@@ -3,7 +3,7 @@ import { type ChangeEvent, useCallback, useRef, useEffect } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/shadcn.ts';
 import { Input } from '@/components/shadcn/input.tsx';
-import { InlineCode, Large, Muted, Small, Span } from '@/components/shadcn/typography.tsx';
+import { InlineCode, Large, Muted, Span } from '@/components/shadcn/typography.tsx';
 import type { Nullish } from '@/types/common.ts';
 import { convertBytes } from '@/utils/file.ts';
 import { FileUp } from 'lucide-react';
