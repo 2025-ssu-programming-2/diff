@@ -356,7 +356,6 @@ export async function streamDiffWasm(options: WasmStreamDiffOptions): Promise<St
       const metrics = tracker.finalize();
       return { response: result.response, metrics };
     } catch (error) {
-      console.error('WASM 처리 실패, JS로 폴백:', error);
       const chunkStart = performance.now();
       const response = diffTextJs(baseText, compareText);
       const chunkDuration = performance.now() - chunkStart;
@@ -411,8 +410,8 @@ export async function streamDiffWasm(options: WasmStreamDiffOptions): Promise<St
       tracker.recordWasmOverhead(result.overhead);
       allRows.push(...result.response.rows);
     } catch (error) {
-      console.error(`청크 ${i + 1} WASM 처리 실패, JS로 폴백:`, error);
       // 실패한 청크는 JS로 처리
+      console.debug(`청크 ${i + 1} WASM 처리 실패, JS로 폴백:`, error);
       const chunkStart = performance.now();
       const fallbackResult = diffTextJs(chunkBaseText, chunkCompareText);
       const chunkDuration = performance.now() - chunkStart;
