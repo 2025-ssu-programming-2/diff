@@ -374,3 +374,38 @@ const char* diff_text_impl(const char* baseText, const char* changedText) {
 - `chore:`: Build와 관련된 수정 및 개선 내용
 - `hotfix:`: `hotfix` 브랜치에서의 작업 내용
 - `docs:`: 문서 수정 및 추가 내용
+
+## 로직 설명
+
+저희 diff 프로그램 로직의 동작 방식을 설명드리겠습니다. 먼저 원본 텍스트와 변경된 텍스트를 받아옵니다.
+
+먼저 splitLines()로 입력 전체 텍스트를 '\n' 기준으로 잘라서:
+두 개의 줄 배열을 만듭니다.
+중요한 점은, 이 구현에서 Myers의 대상은 “문자”가 아니라 줄(line) 단위 시퀀스라는 것입니다.
+
+myersDiff(a, b)에서는 Myers 표준 구조를 따릅니다.
+myers 알고리즘을 통해 최단 편집 거리를 구하고,
+
+끝까지 거리를 구한 후에는 담아둔 최단 편집 거리의  trace를 기반으로 역추적을 수행해 이동 방향에 따라 실제 연산 시퀀스를 복원합니다.
+* snake 구간은 공백으로 기록되고,
+* 경로 이동이 삭제였다면 '-',
+* 삽입이었다면 '+'로 기록됩니다.
+  해당 부분까지가 변경 내역을 구하는 로직이구요.
+  이후에는 데이터 후처리 로직이 들어갑니다.
+
+Myers는 본질적으로 insert/delete/equal 기반으로만 결과가 나오고, replace는 저희가 출력 포맷을 보기 좋게 만들기 위해 제공하는 정책적 묶음입니다.
+저희 로직에서는 다음과 같은 후처리를 합니다.
+* 동일 줄은 op: "equal"
+* 단독 삽입은 op: "insert"
+* 단독 삭제는 delete
+- 그리고 delete이후에 insert가 나오면 이를 1:1로 매칭해 각 줄을 op: "replace"로 출력합니다.
+  replace로 출력하는 줄은 추가로 makeWordTokensJSON(leftLine, rightLine)을 호출해 띄어쓰기 기준 단어 단위 diff tokens를 붙입니다.
+
+이렇게 해서 “줄 단위로는 어떤 줄이 바뀌었는지”를 잡고, “바뀐 줄 내부에서는 어떤 단어가 삽입/삭제되었는지”를 보여주는 형태가 됩니다.
+
+정리하면 이 구현은 다음 흐름입니다.
+1. 텍스트를 줄 배열로 변환하고,
+2. Myers 알고리즘으로 줄 단위 최소 편집 시퀀스를 구하고,
+3. 역추적으로 equal/delete/insert를 복원한 다음,
+4. 일부 delete+insert 블록을 replace로 해석하고,
+5. replace 줄은 단어 단위 tokens를 생성해 JSON에 포함합니다.
