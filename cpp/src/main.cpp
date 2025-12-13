@@ -370,26 +370,103 @@ const char* diff_text_impl(const char* baseText, const char* changedText) {
             leftText = e.text;
             rightText = e.text;
         } else if (e.op == '-') {
-            // 삭제된 줄. 바로 뒤에 '+' 가 있으면 "수정된 줄"로 취급
-            if (i + 1 < edits.size() && edits[i + 1].op == '+') {
-                opName   = "replace";
-                leftText = e.text;
-                rightText = edits[i + 1].text;
+            // 연속된 delete 블록과 insert 블록의 개수를 세기
+            size_t deleteStart = i;
+            size_t deleteCount = 0;
+            while (i < edits.size() && edits[i].op == '-') {
+                deleteCount++;
+                i++;
+            }
 
-                // 띄어쓰기 기준 단어 단위 diff
-                tokensJson = makeWordTokensJSON(leftText, rightText);
-                hasTokens = true;
+            // insert 블록의 개수 세기 (실제로 소비하지는 않음)
+            size_t insertStart = i;
+            size_t insertCount = 0;
+            while (i < edits.size() && edits[i].op == '+') {
+                insertCount++;
+                i++;
+            }
 
-                ++i; // 다음 '+' 항목은 이미 처리했으므로 건너뛰기
+            // delete와 insert 개수가 같으면 1:1 매칭하여 replace로 처리
+            if (deleteCount == insertCount && deleteCount > 0) {
+                for (size_t j = 0; j < deleteCount; j++) {
+                    if (!firstRow) {
+                        result += ",\n";
+                    }
+                    firstRow = false;
+
+                    opName = "replace";
+                    leftText = edits[deleteStart + j].text;
+                    rightText = edits[insertStart + j].text;
+
+                    // 띄어쓰기 기준 단어 단위 diff
+                    tokensJson = makeWordTokensJSON(leftText, rightText);
+                    hasTokens = true;
+
+                    string leftEsc  = escapeJson(leftText);
+                    string rightEsc = escapeJson(rightText);
+
+                    result += "    {";
+                    result += "\"op\":\"" + opName + "\",";
+                    result += "\"left\":\"" + leftEsc + "\",";
+                    result += "\"right\":\"" + rightEsc + "\"";
+                    result += ",\"tokens\":" + tokensJson;
+                    result += "}";
+                }
+
+                // 이미 모든 delete와 insert를 처리했으므로 continue
+                i--; // for문에서 ++i 되므로 1 빼기
+                continue;
             } else {
-                opName   = "delete";
-                leftText = e.text;
-                rightText = ""; // 오른쪽에는 해당 줄 없음
+                // 개수가 다르면 원래대로 delete로 처리
+                // delete 블록 먼저 출력
+                for (size_t j = 0; j < deleteCount; j++) {
+                    if (!firstRow) {
+                        result += ",\n";
+                    }
+                    firstRow = false;
+
+                    opName = "delete";
+                    leftText = edits[deleteStart + j].text;
+                    rightText = "";
+
+                    string leftEsc  = escapeJson(leftText);
+                    string rightEsc = escapeJson(rightText);
+
+                    result += "    {";
+                    result += "\"op\":\"" + opName + "\",";
+                    result += "\"left\":\"" + leftEsc + "\",";
+                    result += "\"right\":\"" + rightEsc + "\"";
+                    result += "}";
+                }
+
+                // insert 블록 출력
+                for (size_t j = 0; j < insertCount; j++) {
+                    if (!firstRow) {
+                        result += ",\n";
+                    }
+                    firstRow = false;
+
+                    opName = "insert";
+                    leftText = "";
+                    rightText = edits[insertStart + j].text;
+
+                    string leftEsc  = escapeJson(leftText);
+                    string rightEsc = escapeJson(rightText);
+
+                    result += "    {";
+                    result += "\"op\":\"" + opName + "\",";
+                    result += "\"left\":\"" + leftEsc + "\",";
+                    result += "\"right\":\"" + rightEsc + "\"";
+                    result += "}";
+                }
+
+                i--; // for문에서 ++i 되므로 1 빼기
+                continue;
             }
         } else if (e.op == '+') {
-            // 추가된 줄
+            // 추가된 줄 (단독으로 나타난 경우, 앞의 delete 블록에서 처리 안 된 경우)
             opName   = "insert";
-            leftText = "";          // 왼쪽에는 해당 줄 없음
+            leftText = "";
             rightText = e.text;
         }
 
@@ -471,6 +548,70 @@ int main() {
     printf("Base:\n%s\n\n", base4);
     printf("Changed:\n%s\n\n", changed4);
     printf("Diff Result:\n%s\n\n", result4);
+
+    printf("===== Test 5: Equal Count Delete/Insert =====\n");
+    const char* base5 = "Line A\nLine B\nLine C";
+    const char* changed5 = "Changed A\nChanged B\nChanged C";
+
+    const char* result5 = diff_text_impl(base5, changed5);
+    printf("Base:\n%s\n\n", base5);
+    printf("Changed:\n%s\n\n", changed5);
+    printf("Diff Result:\n%s\n\n", result5);
+
+    printf("===== Test 6: Bidulgi Case (비둘기 -> 비들기) =====\n");
+    const char* base6 = "창8:7 까마귀를 내놓으매 까마귀가 물이 땅에서 마르기까지 날아 왕래하였더라\n"
+                        "창8:8 그가 또 비둘기를 내놓아 지면에서 물이 줄어들었는지를 알고자 하매 \n"
+                        "창8:9 온 지면에 물이 있으므로 비둘기가 발 붙일 곳을 찾지 못하고 방주로 돌아와 그에게로 오는지라 그가 손을 내밀어 방주 안 자기에게로 받아들이고\n"
+                        "창8:10 또 칠 일을 기다려 다시 비둘기를 방주에서 내놓으매\n"
+                        "창8:11 저녁때에 비둘기가 그에게로 돌아왔는데 그 입에 감람나무 새 잎사귀가 있는지라 이에 노아가 땅에 물이 줄어든 줄을 알았으며\n"
+                        "창8:12 또 칠 일을 기다려 비둘기를 내놓으매 다시는 그에게로 돌아오지 아니하였더라\n"
+                        "창8:13 육백일 년 첫째 달 곧 그 달 초하룻날에 땅 위에서 물이 걷힌지라 노아가 방주 뚜껑을 제치고 본즉 지면에서 물이 걷혔더니";
+
+    const char* changed6 = "창8:7 까마귀를 내놓으매 까마귀가 물이 땅에서 마르기까지 날아 왕래하였더라\n"
+                           "창8:8 그가 또 비들기를 내놓아 지면에서 물이 줄어들었는지를 알고자 하매\n"
+                           "창8:9 온 지면에 물이 있으므로 비들기가 발 붙일 곳을 찾지 못하고 방주로 돌아와 그에게로 오는지라 그가 손을 내밀어 방주 안 자기에게로 받아들이고\n"
+                           "창8:10 또 칠 일을 기다려 다시 비들기를 방주에서 내놓으매\n"
+                           "창8:11 저녁때에 비들기가 그에게로 돌아왔는데 그 입에 감람나무 새 잎사귀가 있는지라 이에 노아가 땅에 물이 줄어든 줄을 알았으며\n"
+                           "창8:12 또 칠 일을 기다려 비들기를 내놓으매 다시는 그에게로 돌아오지 아니하였더라\n"
+                           "창8:13 육백일 년 첫째 달 곧 그 달 초하룻날에 땅 위에서 물이 걷힌지라 노아가 방주 뚜껑을 제치고 본즉 지면에서 물이 걷혔더니";
+
+    const char* result6 = diff_text_impl(base6, changed6);
+    printf("\n\n==== FULL JSON OUTPUT FOR TEST 6 ====\n");
+    printf("%s\n", result6);
+    printf("==== END JSON ====\n\n");
+
+    printf("Diff Result (row-level ops only):\n");
+
+    // 줄 단위 op만 추출 (tokens 안의 op 제외)
+    const char* p = result6;
+    int braceDepth = 0;
+    bool inTokens = false;
+
+    while (*p) {
+        if (*p == '{') braceDepth++;
+        else if (*p == '}') braceDepth--;
+
+        // "tokens" 키를 발견하면 inTokens = true
+        if (strncmp(p, "\"tokens\":", 9) == 0) {
+            inTokens = true;
+        }
+
+        // 줄 단위 객체가 끝나면 inTokens = false
+        if (inTokens && braceDepth == 2 && *p == '}') {
+            inTokens = false;
+        }
+
+        // tokens 안이 아닐 때만 op 출력
+        if (!inTokens && braceDepth == 3 && strncmp(p, "\"op\":\"", 6) == 0) {
+            p += 6;
+            while (*p && *p != '\"') {
+                putchar(*p);
+                p++;
+            }
+            putchar('\n');
+        }
+        p++;
+    }
 
     return 0;
 }
